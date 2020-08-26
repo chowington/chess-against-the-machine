@@ -359,8 +359,10 @@ end
 local nodes = 0
 
 local function bound(pos, gamma, depth)
-   --[[ returns s(pos) <= r < gamma    if s(pos) < gamma
-        returns s(pos) >= r >= gamma   if s(pos) >= gamma ]]--
+    --[[ returns s(pos) <= r < gamma    if s(pos) < gamma
+         returns s(pos) >= r >= gamma   if s(pos) >= gamma
+    ]]--
+    log('at start of bound()')
     nodes = nodes + 1
 
     -- Look in the table if we have already searched this position before.
@@ -393,148 +395,56 @@ local function bound(pos, gamma, depth)
     local best, bmove = -3*MATE_VALUE, nil
     local moves = pos:genMoves()
     local function sorter(a, b)
-       local va = pos:value(a)
-       local vb = pos:value(b)
-       if va ~= vb then
-	  return va > vb
-       else
-	  if a[1] == b[1] then
-	     return a[2] > b[2]
-	  else
-	     return a[1] < b[1]
-	  end
-       end
+        local va = pos:value(a)
+        local vb = pos:value(b)
+        if va ~= vb then
+            return va > vb
+        else
+            if a[1] == b[1] then
+                return a[2] > b[2]
+            else
+                return a[1] < b[1]
+            end
+        end
     end
     table.sort(moves, sorter)
     for _,move in ipairs(moves) do
-       -- We check captures with the value function, as it also contains ep and kp
-       if depth <= 0 and pos:value(move) < 150 then
-	  break
-       end
-       local score = -bound(pos:move(move), 1-gamma, depth-1)
-       -- print(move[1] .. ' ' ..  move[2] .. ' ' .. score)
+        -- We check captures with the value function, as it also contains ep and kp
+        if depth <= 0 and pos:value(move) < 150 then
+            break
+        end
+        local score = -bound(pos:move(move), 1-gamma, depth-1)
+        log(move[1] .. ' ' ..  move[2] .. ' ' .. score)
         if score > best then
-	   best = score
-	   bmove = move
-	end
+            best = score
+            bmove = move
+        end
         if score >= gamma then
-	   break
-	end
+            break
+        end
     end
 
     -- If there are no captures, or just not any good ones, stand pat
     if depth <= 0 and best < nullscore then
-       return nullscore
+        return nullscore
     end
     -- Check for stalemate. If best move loses king, but not doing anything
     -- would save us. Not at all a perfect check.
     if depth > 0 and (best <= -MATE_VALUE) and nullscore > -MATE_VALUE then
-       best = 0
+        best = 0
     end
 
     -- We save the found move together with the score, so we can retrieve it in
     -- the play loop. We also trim the transposition table in FILO order.
     -- We prefer fail-high moves, as they are the ones we can build our pv from.
     if entry == nil or depth >= entry.depth and best >= gamma then
-       tp_set(pos, {depth = depth, score = best, gamma = gamma, move = bmove})
-       if tp_count > TABLE_SIZE then
-	  tp_popitem()
-       end
+        tp_set(pos, {depth = depth, score = best, gamma = gamma, move = bmove})
+        if tp_count > TABLE_SIZE then
+            tp_popitem()
+        end
     end
+    log('ending bound() at end')
     return best
-end
-
-function search()
-   log('start coroutine')
-   -- Iterative deepening MTD-bi search
-   maxn = NODES_SEARCHED
-   nodes = 0 -- the global value "nodes"
-   local score
-
-   -- We limit the depth to some constant, so we don't get a stack overflow in
-   -- the end game.
-   for depth=1,98 do
-      -- The inner loop is a binary search on the score of the position.
-      -- Inv: lower <= score <= upper
-      -- However this may be broken by values from the transposition table,
-      -- as they don't have the same concept of p(score). Hence we just use
-      -- 'lower < upper - margin' as the loop condition.
-      local lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
-      while lower < upper - 3 do
-	 local gamma = math.floor((lower+upper+1)/2)
-	 score = bound(pos, gamma, depth)
-	 -- print(nodes, gamma, score)
-	 assert(score)
-	 if score >= gamma then
-	    lower = score
-	 end
-	 if score < gamma then
-	    upper = score
-	 end
-      end
-      assert(score)
-
-      -- print(string.format("Searched %d nodes. Depth %d. Score %d(%d/%d)", nodes, depth, score, lower, upper))
-
-      -- We stop deepening if the global N counter shows we have spent too
-      -- long, or if we have already won the game.
-      if nodes >= maxn or math.abs(score) >= MATE_VALUE then
-	 break
-      end
-
-      coroutine.yield(0)
-   end
-
-   -- If the game hasn't finished we can retrieve our move from the
-   -- transposition table.
-   local entry = tp_get(pos)
-   if entry ~= nil then
-      -- return entry.move, score
-      chosen_move = entry.move
-      chosen_score = score
-   end
-   -- return nil, score
-   chosen_move = nil
-   chosen_score = score
-
-   log('end coroutine')
-   engine_finished()
-   return 1
-end
-
-
--------------------------------------------------------------------------------
--- User interface
--------------------------------------------------------------------------------
-
-local function parse(c)
-   if not c then return nil end
-   local p, v = c:sub(1,1), c:sub(2,2)
-   if not (p and v and tonumber(v)) then return nil end
-
-   local fil, rank = string.byte(p) - string.byte('a'), tonumber(v) - 1
-   return A1 + fil - 10*rank
-end
-
-
-local function render(i)
-   local rank, fil = math.floor((i - A1) / 10), (i - A1) % 10
-   return string.char(fil + string.byte('a')) .. tostring(-rank + 1)
-end
-
-local function render_black(move)
-    return render(119-move[0 + __1]) .. render(119-move[1 + __1])
-end
-
-local function ttfind(t, k)
-   assert(t)
-   if not k then return false end
-   for _,v in ipairs(t) do
-      if k[1] == v[1] and k[2] == v[2] then
-	 return true
-      end
-   end
-   return false
 end
 
 local strsplit = function(a)
@@ -566,31 +476,28 @@ local function printboard(board)
    log(str)
 end
 
-local function setup_game()
-   -- Global board position used by sunfish
-   pos = Position.new(initial, 0, {true,true}, {true,true}, 0, 0)
-
-   -- We add some spaces to the board before we print it.
-   -- That makes it more readable and pleasing.
-   printboard(pos.board)
+local function render(i)
+   local rank, fil = math.floor((i - A1) / 10), (i - A1) % 10
+   return string.char(fil + string.byte('a')) .. tostring(-rank + 1)
 end
 
-local function handle_player_move(player_move)
-    local crdn = player_move
-    local move = {parse(crdn:sub(1,2)), parse(crdn:sub(3,4))}
-    if not ttfind(pos:genMoves(), move) then
-       -- Inform the user when invalid input (e.g. "help") is entered
-       log("Invalid input. Please enter a move in the proper format (e.g. g8f6)")
-       return false
-    else
-       pos = pos:move(move)
+local function render_black(move)
+    return render(119-move[0 + __1]) .. render(119-move[1 + __1])
+end
 
-     -- After our move we rotate the board and print it again.
-     -- This allows us to see the effect of our move.
-       printboard(pos:rotate().board)
+-- Takes a move string ('e2e4') and physically executes the move on the board
+local function execute_move(move)
+    local square_start = move:sub(1, 2)
+    local square_end = move:sub(3, 4)
+    local trigger_start = square_to_trigger[square_start]
+    local trigger_end = square_to_trigger[square_end]
 
-       return true
-    end
+    local piece = trigger_start.getObjects()[1]
+    local position_end = trigger_end.getPosition()
+    -- The origin of the chess pieces is at their center,
+    -- so we raise them up a bit so they don't try to phase into the board
+    position_end.y = 4
+    piece.setPositionSmooth(position_end, false, false)
 end
 
 local function engine_finished()
@@ -620,12 +527,127 @@ local function engine_finished()
     player_turn = true
 end
 
+function search()
+    log('start coroutine')
+    -- Iterative deepening MTD-bi search
+    maxn = NODES_SEARCHED
+    nodes = 0 -- the global value "nodes"
+    local score
+
+    -- We limit the depth to some constant, so we don't get a stack overflow in
+    -- the end game.
+    for depth=1,98 do
+        -- The inner loop is a binary search on the score of the position.
+        -- Inv: lower <= score <= upper
+        -- However this may be broken by values from the transposition table,
+        -- as they don't have the same concept of p(score). Hence we just use
+        -- 'lower < upper - margin' as the loop condition.
+        local lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
+        while lower < upper - 3 do
+            local gamma = math.floor((lower+upper+1)/2)
+            log('starting bound() from search()')
+            score = bound(pos, gamma, depth)
+            log('nodes '..nodes..' gamma '..gamma..' score '..score)
+            assert(score)
+            if score >= gamma then
+                lower = score
+            end
+            if score < gamma then
+                upper = score
+            end
+        end
+        assert(score)
+
+        log(string.format("Searched %d nodes. Depth %d. Score %d(%d/%d)", nodes, depth, score, lower, upper))
+
+        -- We stop deepening if the global N counter shows we have spent too
+        -- long, or if we have already won the game.
+        if nodes >= maxn or math.abs(score) >= MATE_VALUE then
+            break
+        end
+
+        log('pausing coroutine')
+        coroutine.yield(0)
+        log('resuming coroutine')
+    end
+
+    -- If the game hasn't finished we can retrieve our move from the
+    -- transposition table.
+    local entry = tp_get(pos)
+    if entry ~= nil then
+        -- return entry.move, score
+        chosen_move = entry.move
+        chosen_score = score
+    else
+        -- return nil, score
+        chosen_move = nil
+        chosen_score = score
+    end
+
+    log('end coroutine')
+    engine_finished()
+    return 1
+end
+
+
+-------------------------------------------------------------------------------
+-- User interface
+-------------------------------------------------------------------------------
+
+local function parse(c)
+   if not c then return nil end
+   local p, v = c:sub(1,1), c:sub(2,2)
+   if not (p and v and tonumber(v)) then return nil end
+
+   local fil, rank = string.byte(p) - string.byte('a'), tonumber(v) - 1
+   return A1 + fil - 10*rank
+end
+
+local function ttfind(t, k)
+   assert(t)
+   if not k then return false end
+   for _,v in ipairs(t) do
+      if k[1] == v[1] and k[2] == v[2] then
+	 return true
+      end
+   end
+   return false
+end
+
+local function setup_game()
+   -- Global board position used by sunfish
+   pos = Position.new(initial, 0, {true,true}, {true,true}, 0, 0)
+
+   -- We add some spaces to the board before we print it.
+   -- That makes it more readable and pleasing.
+   printboard(pos.board)
+end
+
+local function handle_player_move(player_move)
+    local crdn = player_move
+    local move = {parse(crdn:sub(1,2)), parse(crdn:sub(3,4))}
+    if not ttfind(pos:genMoves(), move) then
+       -- Inform the user when invalid input (e.g. "help") is entered
+       log("Invalid input. Please enter a move in the proper format (e.g. g8f6)")
+       return false
+    else
+       pos = pos:move(move)
+
+     -- After our move we rotate the board and print it again.
+     -- This allows us to see the effect of our move.
+       printboard(pos:rotate().board)
+
+       return true
+    end
+end
+
 local function make_engine_move()
     log('Engine running...')
     -- Fire up the engine to look for a move.
     -- local move, score = search(pos)
     startLuaCoroutine(Global, 'search')
     -- Wait.condition(engine_finished, function() return chosen_score ~= nil end)
+    log('doing something else...')
 end
 
 
@@ -683,21 +705,6 @@ function spawn_triggers()
     end
 
     Wait.condition(after_triggers_spawned, function() return #triggers == 64 end)
-end
-
--- Takes a move string ('e2e4') and physically executes the move on the board
-local function execute_move(move)
-    local square_start = move:sub(1, 2)
-    local square_end = move:sub(3, 4)
-    local trigger_start = square_to_trigger[square_start]
-    local trigger_end = square_to_trigger[square_end]
-
-    local piece = trigger_start.getObjects()[1]
-    local position_end = trigger_end.getPosition()
-    -- The origin of the chess pieces is at their center,
-    -- so we raise them up a bit so they don't try to phase into the board
-    position_end.y = 4
-    piece.setPositionSmooth(position_end, false, false)
 end
 
 --[[ The onLoad event is called after the game save finishes loading. --]]
