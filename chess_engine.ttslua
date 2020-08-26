@@ -1,10 +1,10 @@
 --[[ Lua code. See documentation: https://api.tabletopsimulator.com/ --]]
 
------------------------------
------------------------------
------ BEGIN SUNFISH.LUA -----
------------------------------
------------------------------
+---------------------------
+---------------------------
+----- BEGIN SUNFISH.LUA ---
+---------------------------
+---------------------------
 
 -- sunfish.lua, a human transpiler work of https://github.com/thomasahle/sunfish
 -- embarassing and ugly translation done by Soumith Chintala
@@ -12,11 +12,11 @@
 
 -- The table size is the maximum number of elements in the transposition table.
 --local TABLE_SIZE = 1e6
-local TABLE_SIZE = 1e4
+local TABLE_SIZE = 500
 
 -- This constant controls how much time we spend on looking for optimal moves.
 --local NODES_SEARCHED = 1e4
-local NODES_SEARCHED = 150
+local NODES_SEARCHED = 50
 
 -- Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 -- King value is set to twice this value such that if the opponent is
@@ -444,51 +444,62 @@ local function bound(pos, gamma, depth)
     return best
 end
 
-local function search(pos, maxn)
-    -- Iterative deepening MTD-bi search
-    maxn = maxn or NODES_SEARCHED
-    nodes = 0 -- the global value "nodes"
-    local score
+function search()
+   log('start coroutine')
+   -- Iterative deepening MTD-bi search
+   maxn = NODES_SEARCHED
+   nodes = 0 -- the global value "nodes"
+   local score
 
-    -- We limit the depth to some constant, so we don't get a stack overflow in
-    -- the end game.
-    for depth=1,98 do
-        -- The inner loop is a binary search on the score of the position.
-        -- Inv: lower <= score <= upper
-        -- However this may be broken by values from the transposition table,
-        -- as they don't have the same concept of p(score). Hence we just use
-        -- 'lower < upper - margin' as the loop condition.
-        local lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
-        while lower < upper - 3 do
-            local gamma = math.floor((lower+upper+1)/2)
-            score = bound(pos, gamma, depth)
-            -- print(nodes, gamma, score)
-            assert(score)
-            if score >= gamma then
-                lower = score
-            end
-            if score < gamma then
-                upper = score
-            end
-        end
-        assert(score)
+   -- We limit the depth to some constant, so we don't get a stack overflow in
+   -- the end game.
+   for depth=1,98 do
+      -- The inner loop is a binary search on the score of the position.
+      -- Inv: lower <= score <= upper
+      -- However this may be broken by values from the transposition table,
+      -- as they don't have the same concept of p(score). Hence we just use
+      -- 'lower < upper - margin' as the loop condition.
+      local lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
+      while lower < upper - 3 do
+	 local gamma = math.floor((lower+upper+1)/2)
+	 score = bound(pos, gamma, depth)
+	 -- print(nodes, gamma, score)
+	 assert(score)
+	 if score >= gamma then
+	    lower = score
+	 end
+	 if score < gamma then
+	    upper = score
+	 end
+      end
+      assert(score)
 
-        -- print(string.format("Searched %d nodes. Depth %d. Score %d(%d/%d)", nodes, depth, score, lower, upper))
+      -- print(string.format("Searched %d nodes. Depth %d. Score %d(%d/%d)", nodes, depth, score, lower, upper))
 
-        -- We stop deepening if the global N counter shows we have spent too
-        -- long, or if we have already won the game.
-        if nodes >= maxn or math.abs(score) >= MATE_VALUE then
-            break
-        end
-    end
+      -- We stop deepening if the global N counter shows we have spent too
+      -- long, or if we have already won the game.
+      if nodes >= maxn or math.abs(score) >= MATE_VALUE then
+	 break
+      end
 
-    -- If the game hasn't finished we can retrieve our move from the
-    -- transposition table.
-    local entry = tp_get(pos)
-    if entry ~= nil then
-        return entry.move, score
-    end
-    return nil, score
+      coroutine.yield(0)
+   end
+
+   -- If the game hasn't finished we can retrieve our move from the
+   -- transposition table.
+   local entry = tp_get(pos)
+   if entry ~= nil then
+      -- return entry.move, score
+      chosen_move = entry.move
+      chosen_score = score
+   end
+   -- return nil, score
+   chosen_move = nil
+   chosen_score = score
+
+   log('end coroutine')
+   engine_finished()
+   return 1
 end
 
 
@@ -556,6 +567,7 @@ local function printboard(board)
 end
 
 local function setup_game()
+   -- Global board position used by sunfish
    pos = Position.new(initial, 0, {true,true}, {true,true}, 0, 0)
 
    -- We add some spaces to the board before we print it.
@@ -567,59 +579,55 @@ local function handle_player_move(player_move)
     local crdn = player_move
     local move = {parse(crdn:sub(1,2)), parse(crdn:sub(3,4))}
     if not ttfind(pos:genMoves(), move) then
-        -- Inform the user when invalid input (e.g. "help") is entered
-        log("Invalid input. Please enter a move in the proper format (e.g. g8f6)")
-        return false
-    -- else
-    --     -- This seems to work well enough for check checking,
-    --     -- however it significantly slows down the game.
-    --     -- Can I somehow incorporate this into genMoves()?
-    --     local this_pos = pos:move(move)
-    --     local next_move, this_score = search(this_pos)
-    --     local lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
-    --     local gamma = math.floor((lower+upper+1)/2)
-    --     next_score = bound(this_pos:move(next_move), gamma, 1)
-    --     log(next_score)
-    --     if math.abs(next_score) >= MATE_VALUE then
-    --     	-- Illegal move - in check?
-    --     	log('Illegal move - King in check!')
-    --     	return false
-    --     end
+       -- Inform the user when invalid input (e.g. "help") is entered
+       log("Invalid input. Please enter a move in the proper format (e.g. g8f6)")
+       return false
+    else
+       pos = pos:move(move)
+
+     -- After our move we rotate the board and print it again.
+     -- This allows us to see the effect of our move.
+       printboard(pos:rotate().board)
+
+       return true
+    end
+end
+
+local function engine_finished()
+    log('Engine done(?)')
+    -- print(move, score)
+    assert(chosen_score)
+    if chosen_score <= -MATE_VALUE then
+        log("You won")
+    end
+    if chosen_score >= MATE_VALUE then
+        log("You lost")
     end
 
-    pos = pos:move(move)
+    assert(chosen_move)
+    -- The black player moves from a rotated position, so we have to
+    -- 'back rotate' the move before printing it.
+    local move_str = render_black(chosen_move)
 
-    -- After our move we rotate the board and print it again.
-    -- This allows us to see the effect of our move.
-    printboard(pos:rotate().board)
+    log("My move:", move_str)
+    pos = pos:move(chosen_move)
+    printboard(pos.board)
 
-    return true
+    chosen_move = nil
+    chosen_score = nil
+
+    execute_move(move_str)
+    player_turn = true
 end
 
 local function make_engine_move()
     log('Engine running...')
     -- Fire up the engine to look for a move.
-    local move, score = search(pos)
-    -- print(move, score)
-    assert(score)
-    if score <= -MATE_VALUE then
-        log("You won")
-    end
-    if score >= MATE_VALUE then
-        log("You lost")
-    end
-
-    assert(move)
-    -- The black player moves from a rotated position, so we have to
-    -- 'back rotate' the move before printing it.
-    local move_str = render_black(move)
-
-    log("My move:", move_str)
-    pos = pos:move(move)
-    printboard(pos.board)
-
-    return move_str
+    -- local move, score = search(pos)
+    startLuaCoroutine(Global, 'search')
+    -- Wait.condition(engine_finished, function() return chosen_score ~= nil end)
 end
+
 
 
 
@@ -636,22 +644,9 @@ end
 
 function trigger_callback(obj, name)
     obj.setName(name)
-
     triggers[#triggers+1] = obj
+    board_state[obj] = obj.getObjects()
     square_to_trigger[name] = obj
-
-    local piece = obj.getObjects()[1]
-    if piece then
-        -- Assign piece to white or black based on its rank
-        -- Should change to not show name on hover
-        if tonumber(name:sub(2)) <= 4 then
-            piece.setName('white')
-        else
-            piece.setName('black')
-        end
-    end
-
-    board_state[obj] = piece
 end
 
 function after_triggers_spawned()
@@ -660,6 +655,16 @@ end
 
 --Run once to spawn board triggers
 function spawn_triggers()
+    -- 1D array of triggers
+    triggers = {}
+    -- Table mapping trigger to piece
+    board_state = {}
+    -- Table mapping square to trigger
+    square_to_trigger = {}
+
+    local square_size = 1.7
+    local a1_xz = -3.5 * square_size
+
     for rank = 1,8 do
         local z = a1_xz + (rank-1)*square_size
 
@@ -686,49 +691,13 @@ local function execute_move(move)
     local square_end = move:sub(3, 4)
     local trigger_start = square_to_trigger[square_start]
     local trigger_end = square_to_trigger[square_end]
-    local position_start = trigger_start.getPosition()
-    local position_end = trigger_end.getPosition()
 
-    local moving_piece = trigger_start.getObjects()[1]
-    local captured_piece = trigger_end.getObjects()[1]
-
-    if captured_piece then
-        -- Move it up and out of the way
-        local new_pos = captured_piece.getPosition()
-        new_pos.y = 10
-        captured_piece.setPositionSmooth(new_pos, false, false)
-        Wait.condition(
-            function()
-                -- Throw it because I'm lazy
-                captured_piece.addForce(Vector(0, 15, 20))
-                captured_piece.addTorque(Vector(10, 0, 0))
-            end,
-            function() return not captured_piece.isSmoothMoving() end)
-    end
-
+    local piece = trigger_start.getObjects()[1]
     local position_end = trigger_end.getPosition()
     -- The origin of the chess pieces is at their center,
     -- so we raise them up a bit so they don't try to phase into the board
     position_end.y = 4
-    moving_piece.setPositionSmooth(position_end, false, false)
-
-    -- Castling isn't signified by any special character,
-    -- so we'll need to check whether the moving piece is a king
-    -- and whether it's moving more than one square. If so,
-    -- move the corresponding rook to the appropriate spot.
-    if moving_piece.name == 'Chess_King' then
-        local distance_vec = position_end - position_start
-        if math.abs(distance_vec.x) > 1.5*square_size then
-            -- Move rook based on what square the king ends on
-            local rook_move = {
-                ['b1'] = 'a1c1',
-                ['g1'] = 'h1f1',
-                ['b8'] = 'a8c8',
-                ['g8'] = 'h8f8'
-            }
-            execute_move(rook_move[square_end])
-        end
-    end
+    piece.setPositionSmooth(position_end, false, false)
 end
 
 --[[ The onLoad event is called after the game save finishes loading. --]]
@@ -745,17 +714,11 @@ function onLoad()
     }
 
     player_move = ''
-    player_color = 'white'
     player_turn = true
-    square_size = 1.7
-    a1_xz = -3.5 * square_size
-    -- 1D array of triggers (not yet used)
-    triggers = {}
-    -- Table mapping trigger to piece (not yet used)
-    board_state = {}
-    -- Table mapping square to trigger
-    square_to_trigger = {}
-
+    -- Have to make these global so we can run the engine as a coroutine
+    chosen_move = nil
+    chosen_score = nil
+    chosen_move_str = nil
     spawn_triggers()
     setup_game()
 end
@@ -766,63 +729,30 @@ function onUpdate()
 end
 
 function onObjectLeaveScriptingZone(zone, leave_object)
-    player_move = ''
-
-    if player_turn and leave_object.getName() == player_color then
+    if player_turn then
         local name = zone.getName()
         log('Leaving '..name)
         player_move = name
     end
 end
 
-function onObjectEnterScriptingZone(zone, enter_object)
-    local function handleEvent(zone, enter_object)
+function onObjectEnterScriptingZone(zone, leave_object)
+    if player_turn then
         local name = zone.getName()
 
         if #name > 0 then
             log('Entering '..name)
             player_move = player_move..name
+            log('Player move: '..player_move)
 
-            -- If the player actually moved a piece to a different square
-            if player_move:sub(1, 2) ~= player_move:sub(3, 4) then
-                log('Player move: '..player_move)
+            -- Send the player's move to the engine
+            local valid_move = handle_player_move(player_move)
 
-                -- Send the player's move to the engine
-                local valid_move = handle_player_move(player_move)
-
-                if valid_move then
-                    player_turn = false
-                    -- Let the engine choose a move
-                    broadcastToColor("Black's turn...", 'White', {r=0, g=0, b=0})
-                    local engine_move = make_engine_move()
-                    -- Execute the move on the board
-                    execute_move(engine_move)
-                    -- This doesn't yet work as intended
-                    player_turn = true
-                else
-                    broadcastToColor('Illegal move!', 'White', {r=1, g=0, b=0})
-                    -- Reset the piece
-                    -- This doesn't play nicely if the move was messy
-                    player_turn = false
-                    local orig_square = player_move:sub(1, 2)
-                    local orig_pos = square_to_trigger[orig_square].getPosition()
-                    orig_pos.y = 4
-                    enter_object.setPositionSmooth(orig_pos, false, true)
-                    Wait.condition(
-                        function() player_turn = true end,
-                        function()
-                            return not enter_object.isSmoothMoving() and enter_object.resting
-                        end
-                    )
-                end
+            if valid_move then
+                player_turn = false
+                -- Let the engine make a move
+                make_engine_move()
             end
         end
-    end
-
-    if player_turn and enter_object.getName() == player_color then
-        Wait.condition(
-            function() handleEvent(zone, enter_object) end,
-            function() return enter_object.resting end
-        )
     end
 end
