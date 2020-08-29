@@ -359,92 +359,125 @@ end
 local nodes = 0
 
 local function bound(pos, gamma, depth)
-    --[[ returns s(pos) <= r < gamma    if s(pos) < gamma
-         returns s(pos) >= r >= gamma   if s(pos) >= gamma
-    ]]--
-    log('at start of bound()')
-    nodes = nodes + 1
+    function boundCoroutine()
+        --[[ returns s(pos) <= r < gamma    if s(pos) < gamma
+             returns s(pos) >= r >= gamma   if s(pos) >= gamma
+        ]]--
+        --log('at start of bound()')
+        bound_done = false
+        coroutine.yield(0)
+        nodes = nodes + 1
 
-    -- Look in the table if we have already searched this position before.
-    -- We use the table value if it was done with at least as deep a search
-    -- as ours, and the gamma value is compatible.
-    local entry = tp_get(pos)
-    assert(depth)
-    if entry ~= nil and entry.depth >= depth and (
-            entry.score < entry.gamma and entry.score < gamma or
-            entry.score >= entry.gamma and entry.score >= gamma) then
-        return entry.score
-    end
+        -- Look in the table if we have already searched this position before.
+        -- We use the table value if it was done with at least as deep a search
+        -- as ours, and the gamma value is compatible.
+        local entry = tp_get(pos)
+        assert(depth)
+        if entry ~= nil and entry.depth >= depth and (
+                entry.score < entry.gamma and entry.score < gamma or
+                entry.score >= entry.gamma and entry.score >= gamma) then
+            bound_score = entry.score
+            bound_done = true
+            return 1
+        end
 
-    -- Stop searching if we have won/lost.
-    if math.abs(pos.score) >= MATE_VALUE then
-        return pos.score
-    end
+        -- Stop searching if we have won/lost.
+        if math.abs(pos.score) >= MATE_VALUE then
+            bound_score = pos.score
+            bound_done = true
+            return 1
+        end
 
-    -- Null move. Is also used for stalemate checking
-    local nullscore = depth > 0 and -bound(pos:rotate(), 1-gamma, depth-3) or pos.score
-    --nullscore = -MATE_VALUE*3 if depth > 0 else pos.score
-    if nullscore >= gamma then
-        return nullscore
-    end
+        -- Null move. Is also used for stalemate checking
+        local nullscore
+        if depth > 0 then
+            bound(pos:rotate(), 1-gamma, depth-3)
+            while not bound_done do
+                coroutine.yield(0)
+            end
 
-    -- We generate all possible, pseudo legal moves and order them to provoke
-    -- cuts. At the next level of the tree we are going to minimize the score.
-    -- This can be shown equal to maximizing the negative score, with a slightly
-    -- adjusted gamma value.
-    local best, bmove = -3*MATE_VALUE, nil
-    local moves = pos:genMoves()
-    local function sorter(a, b)
-        local va = pos:value(a)
-        local vb = pos:value(b)
-        if va ~= vb then
-            return va > vb
+            nullscore = -bound_score
         else
-            if a[1] == b[1] then
-                return a[2] > b[2]
+            nullscore = pos.score
+        end
+        --local nullscore = depth > 0 and -bound_score or pos.score
+        --nullscore = -MATE_VALUE*3 if depth > 0 else pos.score
+        if nullscore >= gamma then
+            bound_score = nullscore
+            bound_done = true
+            return 1
+        end
+
+        -- We generate all possible, pseudo legal moves and order them to provoke
+        -- cuts. At the next level of the tree we are going to minimize the score.
+        -- This can be shown equal to maximizing the negative score, with a slightly
+        -- adjusted gamma value.
+        local best, bmove = -3*MATE_VALUE, nil
+        local moves = pos:genMoves()
+        local function sorter(a, b)
+            local va = pos:value(a)
+            local vb = pos:value(b)
+            if va ~= vb then
+                return va > vb
             else
-                return a[1] < b[1]
+                if a[1] == b[1] then
+                    return a[2] > b[2]
+                else
+                    return a[1] < b[1]
+                end
             end
         end
-    end
-    table.sort(moves, sorter)
-    for _,move in ipairs(moves) do
-        -- We check captures with the value function, as it also contains ep and kp
-        if depth <= 0 and pos:value(move) < 150 then
-            break
+        table.sort(moves, sorter)
+        for _,move in ipairs(moves) do
+            -- We check captures with the value function, as it also contains ep and kp
+            if depth <= 0 and pos:value(move) < 150 then
+                break
+            end
+
+            bound(pos:move(move), 1-gamma, depth-1)
+            while not bound_done do
+                coroutine.yield(0)
+            end
+
+            local score = -bound_score
+            --log(move[1] .. ' ' ..  move[2] .. ' ' .. score)
+            if score > best then
+                best = score
+                bmove = move
+            end
+            if score >= gamma then
+                break
+            end
         end
-        local score = -bound(pos:move(move), 1-gamma, depth-1)
-        log(move[1] .. ' ' ..  move[2] .. ' ' .. score)
-        if score > best then
-            best = score
-            bmove = move
+
+        -- If there are no captures, or just not any good ones, stand pat
+        if depth <= 0 and best < nullscore then
+            bound_score = nullscore
+            bound_done = true
+            return 1
         end
-        if score >= gamma then
-            break
+        -- Check for stalemate. If best move loses king, but not doing anything
+        -- would save us. Not at all a perfect check.
+        if depth > 0 and (best <= -MATE_VALUE) and nullscore > -MATE_VALUE then
+            best = 0
         end
+
+        -- We save the found move together with the score, so we can retrieve it in
+        -- the play loop. We also trim the transposition table in FILO order.
+        -- We prefer fail-high moves, as they are the ones we can build our pv from.
+        if entry == nil or depth >= entry.depth and best >= gamma then
+            tp_set(pos, {depth = depth, score = best, gamma = gamma, move = bmove})
+            if tp_count > TABLE_SIZE then
+                tp_popitem()
+            end
+        end
+        --log('ending bound() at end')
+        bound_score = best
+        bound_done = true
+        return 1
     end
 
-    -- If there are no captures, or just not any good ones, stand pat
-    if depth <= 0 and best < nullscore then
-        return nullscore
-    end
-    -- Check for stalemate. If best move loses king, but not doing anything
-    -- would save us. Not at all a perfect check.
-    if depth > 0 and (best <= -MATE_VALUE) and nullscore > -MATE_VALUE then
-        best = 0
-    end
-
-    -- We save the found move together with the score, so we can retrieve it in
-    -- the play loop. We also trim the transposition table in FILO order.
-    -- We prefer fail-high moves, as they are the ones we can build our pv from.
-    if entry == nil or depth >= entry.depth and best >= gamma then
-        tp_set(pos, {depth = depth, score = best, gamma = gamma, move = bmove})
-        if tp_count > TABLE_SIZE then
-            tp_popitem()
-        end
-    end
-    log('ending bound() at end')
-    return best
+    startLuaCoroutine(Global, 'boundCoroutine')
 end
 
 local strsplit = function(a)
@@ -501,7 +534,7 @@ local function execute_move(move)
 end
 
 local function engine_finished()
-    log('Engine done(?)')
+    log('Engine done')
     -- print(move, score)
     assert(chosen_score)
     if chosen_score <= -MATE_VALUE then
@@ -528,7 +561,7 @@ local function engine_finished()
 end
 
 function search()
-    log('start coroutine')
+    --log('start search() coroutine')
     -- Iterative deepening MTD-bi search
     maxn = NODES_SEARCHED
     nodes = 0 -- the global value "nodes"
@@ -545,9 +578,15 @@ function search()
         local lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
         while lower < upper - 3 do
             local gamma = math.floor((lower+upper+1)/2)
-            log('starting bound() from search()')
-            score = bound(pos, gamma, depth)
-            log('nodes '..nodes..' gamma '..gamma..' score '..score)
+            --log('starting bound() from search()')
+            bound(pos, gamma, depth)
+            --log('back to search() from bound()')
+            while not bound_done do
+                --log('search yielding in while loop')
+                coroutine.yield(0)
+            end
+            score = bound_score
+            --log('nodes '..nodes..' gamma '..gamma..' score '..score)
             assert(score)
             if score >= gamma then
                 lower = score
@@ -558,7 +597,7 @@ function search()
         end
         assert(score)
 
-        log(string.format("Searched %d nodes. Depth %d. Score %d(%d/%d)", nodes, depth, score, lower, upper))
+        --log(string.format("Searched %d nodes. Depth %d. Score %d(%d/%d)", nodes, depth, score, lower, upper))
 
         -- We stop deepening if the global N counter shows we have spent too
         -- long, or if we have already won the game.
@@ -566,9 +605,9 @@ function search()
             break
         end
 
-        log('pausing coroutine')
+        --log('pausing coroutine')
         coroutine.yield(0)
-        log('resuming coroutine')
+        --log('resuming coroutine')
     end
 
     -- If the game hasn't finished we can retrieve our move from the
@@ -584,7 +623,7 @@ function search()
         chosen_score = score
     end
 
-    log('end coroutine')
+    --log('end coroutine')
     engine_finished()
     return 1
 end
