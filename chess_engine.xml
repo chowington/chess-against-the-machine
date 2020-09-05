@@ -2,3 +2,30 @@
 <!-- <Panel id="panel" rectAlignment="UpperCenter" offsetXY="0 -100" height="30" width="100">
     <ProgressBar id="progressbar" percentage="75"></ProgressBar>
 </Panel> -->
+<VerticalLayout id="help_panel" rectAlignment="MiddleRight" height="1000" width="400" offsetXY="-10 0">
+    <Text color="white" height="10000" width="500" alignment="MiddleLeft" fontSize="18">
+        Welcome to single-player chess!
+
+
+        Notes:
+
+        -- You play as white. The computer plays as black.
+
+        -- To capture a piece:
+        ---- 1. Move the opponent's piece off the board.
+        ---- 2. Place your piece on its new square.
+
+        -- Pawns automatically promote to queens.
+
+        -- To castle, simply move your king to its new square. The rook will automatically be moved for you.
+
+        -- This is king-capture chess, meaning that players are allowed to play a move that ends with their own king in check, and the king can be captured.
+
+        -- The computer may take some time to think about its move.
+
+        -- The chess engine is not that robust. The following things may break the game:
+        ---- Tossing a piece or letting a piece roll across the board.
+        ---- Going back in the game's history using the left and right arrow at the top of the screen.
+        ---- Randomly moving black's pieces around the board.
+    </Text>
+</VerticalLayout>
