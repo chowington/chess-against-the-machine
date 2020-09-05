@@ -367,6 +367,7 @@ local function bound(pos, gamma, depth)
         bound_done = false
         coroutine.yield(0)
         nodes = nodes + 1
+        --log(nodes)
 
         -- Look in the table if we have already searched this position before.
         -- We use the table value if it was done with at least as deep a search
@@ -518,14 +519,44 @@ local function render_black(move)
     return render(119-move[0 + __1]) .. render(119-move[1 + __1])
 end
 
-local function set_interactivity(value)
+function set_interactivity(value)
     for key, obj in pairs(getAllObjects()) do
         obj.interactable = value
     end
 end
 
+function handle_pawn_promotion(square_end)
+    -- Handle pawn promotion
+    -- Note that sunfish.lua always promotes to queen
+    -- Works for black. Need to test for white.
+    local moved_piece = square_to_trigger[square_end].getObjects()[1]
+
+    if moved_piece.name == 'Chess_Pawn' then
+        local rank_end = square_end:sub(2, 2)
+        if rank_end == '1' or rank_end == '8' then
+            local position = moved_piece.getPosition()
+            position.y = 3.41
+
+            local queen_json
+            if rank_end == '1' then
+                queen_json = Black_Queen.getJSON()
+            else
+                queen_json = White_Queen.getJSON()
+            end
+            -- Delete pawn
+            moved_piece.destruct()
+            -- Clone new queen from stored piece
+            spawnObjectJSON({
+                json = queen_json,
+                position = position,
+                rotation = {x=0, y=0, z=0}
+            })
+        end
+    end
+end
+
 -- Takes a move string ('e2e4') and physically executes the move on the board
-local function execute_move(move)
+function execute_move(move)
     local square_start = move:sub(1, 2)
     local square_end = move:sub(3, 4)
     local trigger_start = square_to_trigger[square_start]
@@ -535,6 +566,24 @@ local function execute_move(move)
 
     local moving_piece = trigger_start.getObjects()[1]
     local captured_piece = trigger_end.getObjects()[1]
+
+    -- Handle en passant
+    -- Check to see whether the moving piece is a pawn and whether its ending
+    -- file is different than its starting file.
+    -- Works when calling execute_move independently. Needs to be tested in an
+    -- actual game.
+    if (moving_piece.name == 'Chess_Pawn' and
+        square_start:sub(1, 1) ~= square_end:sub(1, 1)
+    ) then
+        -- This implies that the pawn is capturing a piece. If no piece exists
+        -- on the ending square, then we are executing an en passant
+        if not captured_piece then
+            -- The pawn that is being captured is at the capturing pawn's
+            -- ending file and starting rank
+            local captured_square = square_end:sub(1, 1)..square_start:sub(2, 2)
+            captured_piece = square_to_trigger[captured_square].getObjects()[1]
+        end
+    end
 
     if captured_piece then
         -- Move it up and out of the way
@@ -577,6 +626,7 @@ local function execute_move(move)
     if not game_over and not player_turn then
         Wait.condition(
             function()
+                handle_pawn_promotion(square_end)
                 set_interactivity(true)
                 player_turn = true
                 broadcastToAll("White's turn!", {r=1, g=1, b=1})
@@ -641,6 +691,7 @@ function search()
     -- We limit the depth to some constant, so we don't get a stack overflow in
     -- the end game.
     for depth=1,98 do
+        --log('depth: '..tostring(depth))
         -- The inner loop is a binary search on the score of the position.
         -- Inv: lower <= score <= upper
         -- However this may be broken by values from the transposition table,
@@ -780,6 +831,8 @@ local function handle_player_move(move)
         end
     end
 
+    handle_pawn_promotion(square_end)
+
     pos = pos:move(parsed_move)
 
     -- After our move we rotate the board and print it again.
@@ -825,6 +878,15 @@ function trigger_callback(obj, name)
             piece.setName('white')
         else
             piece.setName('black')
+        end
+
+        -- If piece is a queen, store it for later use when promoting pawns
+        if piece.name == 'Chess_Queen' then
+            if piece.getName() == 'white' then
+                White_Queen = piece
+            else
+                Black_Queen = piece
+            end
         end
     end
 
@@ -890,6 +952,9 @@ end
 --[[ The onUpdate event is called once per frame. --]]
 function onUpdate()
     --[[ print('onUpdate loop!') --]]
+    -- This is meant to show the engine's progress in finding a move, however
+    -- nodes is a minimum, not a maximum, so I'm not sure how helpful this is.
+    --UI.setAttribute('progressbar', 'percentage', nodes / NODES_SEARCHED * 100)
 end
 
 function onObjectLeaveScriptingZone(zone, leave_object)

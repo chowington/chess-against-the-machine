@@ -1,0 +1,4 @@
+<!-- Xml UI. See documentation: https://api.tabletopsimulator.com/ui/introUI/ -->
+<!-- <Panel id="panel" rectAlignment="UpperCenter" offsetXY="0 -100" height="30" width="100">
+    <ProgressBar id="progressbar" percentage="75"></ProgressBar>
+</Panel> -->
