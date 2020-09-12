@@ -630,6 +630,8 @@ function execute_move(move)
                 set_interactivity(true)
                 player_turn = true
                 broadcastToAll("White's turn!", {r=1, g=1, b=1})
+                UI.setAttribute('turn_text', 'text', "White's turn")
+                UI.setAttribute('turn_text', 'color', 'white')
             end,
             function()
                 return not moving_piece.isSmoothMoving() and moving_piece.resting
@@ -880,6 +882,10 @@ function trigger_callback(obj, name)
             piece.setName('black')
         end
 
+        -- The piece's mouseover tooltip now shows 'black' or 'white'.
+        -- We'll disable that.
+        piece.tooltip = false
+
         -- If piece is a queen, store it for later use when promoting pawns
         if piece.name == 'Chess_Queen' then
             if piece.getName() == 'white' then
@@ -989,6 +995,8 @@ function onObjectEnterScriptingZone(zone, enter_object)
                     set_interactivity(false)
                     -- Let the engine choose a move
                     broadcastToAll("Black's turn...", {r=0, g=0, b=0})
+                    UI.setAttribute('turn_text', 'text', "Black's turn")
+                    UI.setAttribute('turn_text', 'color', 'black')
                     make_engine_move()
                 else
                     broadcastToAll('Illegal move!', {r=1, g=0.5, b=0})

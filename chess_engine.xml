@@ -25,7 +25,13 @@
 
         -- The chess engine is not that robust. The following things may break the game:
         ---- Tossing a piece or letting a piece roll across the board.
-        ---- Going back in the game's history using the left and right arrow at the top of the screen.
+        ---- Going back in the game's history using the left and right arrows at the top of the screen.
         ---- Randomly moving black's pieces around the board.
+    </Text>
+</VerticalLayout>
+
+<VerticalLayout id="turn_panel" rectAlignment="UpperLeft" height="70" width="200" offsetXY="70 0">
+    <Text id="turn_text" color="white" fontSize="30">
+        White's turn
     </Text>
 </VerticalLayout>
