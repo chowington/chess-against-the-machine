@@ -30,8 +30,10 @@
     </Text>
 </VerticalLayout>
 
-<VerticalLayout id="turn_panel" rectAlignment="UpperLeft" height="70" width="200" offsetXY="70 0">
+<VerticalLayout id="turn_panel" rectAlignment="UpperLeft" height="200" width="200" offsetXY="70 0">
     <Text id="turn_text" color="white" fontSize="30">
         White's turn
     </Text>
+    <Button onClick="step_game_back">Go back</Button>
+    <Button>Go forward</Button>
 </VerticalLayout>

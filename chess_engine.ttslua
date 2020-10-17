@@ -167,6 +167,10 @@ local function swapcase(s)
    return s2
 end
 
+function add_to_history(position)
+    board_history[#board_history + 1] = position
+end
+
 local Position = {}
 
 function Position.new(board, score, wc, bc, ep, kp)
@@ -675,6 +679,7 @@ local function engine_finished()
 
     log("My move: "..move_str)
     pos = pos:move(chosen_move)
+    add_to_history(pos)
     printboard(pos.board)
 
     chosen_move = nil
@@ -779,6 +784,8 @@ end
 
 local function setup_game()
    pos = Position.new(initial, 0, {true,true}, {true,true}, 0, 0)
+   board_history = {}
+   add_to_history(pos)
 
    -- We add some spaces to the board before we print it.
    -- That makes it more readable and pleasing.
@@ -836,6 +843,8 @@ local function handle_player_move(move)
     handle_pawn_promotion(square_end)
 
     pos = pos:move(parsed_move)
+    -- The position is now reversed. Rotate it back to store in history.
+    add_to_history(pos:rotate())
 
     -- After our move we rotate the board and print it again.
     -- This allows us to see the effect of our move.
@@ -885,6 +894,9 @@ function trigger_callback(obj, name)
         -- The piece's mouseover tooltip now shows 'black' or 'white'.
         -- We'll disable that.
         piece.tooltip = false
+
+        -- Store this piece for later reference
+        pieces[piece.getName()][piece.name] = piece
 
         -- If piece is a queen, store it for later use when promoting pawns
         if piece.name == 'Chess_Queen' then
@@ -938,18 +950,29 @@ function onLoad()
         {"a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"}
     }
 
+    sunfish_to_tts_pieces = {
+        p = 'Chess_Pawn',
+        r = 'Chess_Rook',
+        n = 'Chess_Knight',
+        b = 'Chess_Bishop',
+        q = 'Chess_Queen',
+        k = 'Chess_King'
+    }
+
     game_over = false
     player_move = ''
     player_color = 'white'
     player_turn = true
     square_size = 1.7
     a1_xz = -3.5 * square_size
-    -- 1D array of triggers (not yet used)
+    -- 1D array of triggers
     triggers = {}
-    -- Table mapping trigger to piece (not yet used)
+    -- Table mapping trigger to piece (not yet used or kept up to date)
     board_state = {}
     -- Table mapping square to trigger
     square_to_trigger = {}
+    -- Table mapping type of piece to object of that piece type
+    pieces = {white = {}, black = {}}
 
     spawn_triggers()
     setup_game()
@@ -1026,4 +1049,64 @@ function onObjectEnterScriptingZone(zone, enter_object)
             function() return enter_object.resting end
         )
     end
+end
+
+-- Takes a sunfish.lua board position string and sets it up on the TTS board
+function set_position(position)
+    log('setting up position...')
+    log(position)
+    player_turn = false
+
+    -- Clear the current board
+    for _, trigger in pairs(triggers) do
+        local piece = trigger.getObjects()[1]
+        if piece then
+            piece.destruct()
+        end
+    end
+
+    -- Build the new position
+    for square = A8, H1 do
+        log(square)
+        local piece = position:sub(square + __1, square + __1)
+        log(piece)
+
+        if piece ~= '.' and piece ~= ' ' and piece ~= '\n' then
+            local lower_piece = piece:lower()
+            local color = 'white'
+            if piece == lower_piece then
+                color = 'black'
+            end
+
+            -- Get xyz position to spawn piece
+            local square_str = tostring(square - 10)
+            log(square_str)
+            local rank_index = tonumber(square_str:sub(1, 1))
+            local file_index = tonumber(square_str:sub(2, 2))
+            local square_name = squares[rank_index][file_index]
+            log(square_name)
+            local trigger = square_to_trigger[square_name]
+            log(trigger)
+            local pos = trigger.getPosition()
+            pos.y = 4
+
+            -- Spawn the piece
+            local piece_json = pieces[color][sunfish_to_tts_pieces[lower_piece]].getJSON()
+            spawnObjectJSON({
+                json = piece_json,
+                position = pos,
+                rotation = {x=0, y=0, z=0}
+            })
+        end
+    end
+
+    Wait.time(function() player_turn = true end, 1.5)
+end
+
+-- Go back in the game's history to before last player move
+-- Buggy when going back more than once
+function step_game_back()
+    local new_position = board_history[#board_history - 2]
+    pos = new_position
+    set_position(new_position.board)
 end
