@@ -167,8 +167,11 @@ local function swapcase(s)
    return s2
 end
 
+-- History is implemented as a doubly-linked list
 function add_to_history(position)
-    board_history[#board_history + 1] = position
+    local new_list_item = {prev = curr_board_position, next = nil, value = position}
+    curr_board_position.next = new_list_item
+    curr_board_position = new_list_item
 end
 
 local Position = {}
@@ -632,7 +635,7 @@ function execute_move(move)
             function()
                 handle_pawn_promotion(square_end)
                 set_interactivity(true)
-                player_turn = true
+                set_player_turn(true)
                 broadcastToAll("White's turn!", {r=1, g=1, b=1})
                 UI.setAttribute('turn_text', 'text', "White's turn")
                 UI.setAttribute('turn_text', 'color', 'white')
@@ -784,8 +787,7 @@ end
 
 local function setup_game()
    pos = Position.new(initial, 0, {true,true}, {true,true}, 0, 0)
-   board_history = {}
-   add_to_history(pos)
+   curr_board_position = {prev = nil, next = nil, value = pos}
 
    -- We add some spaces to the board before we print it.
    -- That makes it more readable and pleasing.
@@ -896,7 +898,7 @@ function trigger_callback(obj, name)
         piece.tooltip = false
 
         -- Store this piece for later reference
-        pieces[piece.getName()][piece.name] = piece
+        pieces_json[piece.getName()][piece.name] = piece.getJSON()
 
         -- If piece is a queen, store it for later use when promoting pawns
         if piece.name == 'Chess_Queen' then
@@ -971,8 +973,8 @@ function onLoad()
     board_state = {}
     -- Table mapping square to trigger
     square_to_trigger = {}
-    -- Table mapping type of piece to object of that piece type
-    pieces = {white = {}, black = {}}
+    -- Table mapping type of piece to json of that piece type
+    pieces_json = {white = {}, black = {}}
 
     spawn_triggers()
     setup_game()
@@ -1014,7 +1016,7 @@ function onObjectEnterScriptingZone(zone, enter_object)
                 if valid_move then
                     -- Set player_turn to false
                     -- It will get reset to true during make_engine_move()
-                    player_turn = false
+                    set_player_turn(false)
                     set_interactivity(false)
                     -- Let the engine choose a move
                     broadcastToAll("Black's turn...", {r=0, g=0, b=0})
@@ -1025,13 +1027,13 @@ function onObjectEnterScriptingZone(zone, enter_object)
                     broadcastToAll('Illegal move!', {r=1, g=0.5, b=0})
                     -- Reset the piece
                     -- This doesn't play nicely if the move was messy
-                    player_turn = false
+                    set_player_turn(false)
                     local orig_square = player_move:sub(1, 2)
                     local orig_pos = square_to_trigger[orig_square].getPosition()
                     orig_pos.y = 4
                     enter_object.setPositionSmooth(orig_pos, false, true)
                     Wait.condition(
-                        function() player_turn = true end,
+                        function() set_player_turn(true) end,
                         function()
                             return not enter_object.isSmoothMoving() and enter_object.resting
                         end
@@ -1052,10 +1054,11 @@ function onObjectEnterScriptingZone(zone, enter_object)
 end
 
 -- Takes a sunfish.lua board position string and sets it up on the TTS board
+-- Doesn't remove pieces that aren't on a trigger--pieces off the board
 function set_position(position)
     log('setting up position...')
     log(position)
-    player_turn = false
+    set_player_turn(false)
 
     -- Clear the current board
     for _, trigger in pairs(triggers) do
@@ -1091,7 +1094,7 @@ function set_position(position)
             pos.y = 4
 
             -- Spawn the piece
-            local piece_json = pieces[color][sunfish_to_tts_pieces[lower_piece]].getJSON()
+            local piece_json = pieces_json[color][sunfish_to_tts_pieces[lower_piece]]
             spawnObjectJSON({
                 json = piece_json,
                 position = pos,
@@ -1100,13 +1103,56 @@ function set_position(position)
         end
     end
 
-    Wait.time(function() player_turn = true end, 1.5)
+    Wait.time(function() set_player_turn(true) end, 1)
 end
 
--- Go back in the game's history to before last player move
--- Buggy when going back more than once
+-- Go back in the game's history to before the last player move
 function step_game_back()
-    local new_position = board_history[#board_history - 2]
-    pos = new_position
-    set_position(new_position.board)
+    if (curr_board_position.prev ~= nil and curr_board_position.prev.prev ~= nil) then
+        curr_board_position = curr_board_position.prev.prev
+        local new_position = curr_board_position.value
+        pos = new_position
+        set_position(new_position.board)
+    end
+end
+
+-- Go forward in the game's history to before the next player move
+function step_game_forward()
+    if (curr_board_position.next ~= nil and curr_board_position.next.next ~= nil) then
+        curr_board_position = curr_board_position.next.next
+        local new_position = curr_board_position.value
+        pos = new_position
+        set_position(new_position.board)
+    end
+end
+
+function reset_board()
+    set_position(curr_board_position.value.board)
+end
+
+function update_buttons()
+    if (curr_board_position.prev == nil) then
+        UI.setAttribute('back_button', 'interactable', false)
+    else
+        UI.setAttribute('back_button', 'interactable', true)
+    end
+
+    if (curr_board_position.next == nil) then
+        UI.setAttribute('forward_button', 'interactable', false)
+    else
+        UI.setAttribute('forward_button', 'interactable', true)
+    end
+end
+
+function set_player_turn(value)
+    player_turn = value
+
+    if (not value) then
+        UI.setAttribute('back_button', 'interactable', false)
+        UI.setAttribute('forward_button', 'interactable', false)
+        UI.setAttribute('reset_button', 'interactable', false)
+    else
+        update_buttons()
+        UI.setAttribute('reset_button', 'interactable', true)
+    end
 end
