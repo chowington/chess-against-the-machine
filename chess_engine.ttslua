@@ -909,12 +909,6 @@ function trigger_callback(obj, name)
             end
         end
     end
-
-    board_state[obj] = piece
-end
-
-function after_triggers_spawned()
-    log('Triggers spawned')
 end
 
 --Run once to spawn board triggers
@@ -936,7 +930,7 @@ function spawn_triggers()
         end
     end
 
-    Wait.condition(after_triggers_spawned, function() return #triggers == 64 end)
+    Wait.condition(function() log('Triggers spawned') end, function() return #triggers == 64 end)
 end
 
 --[[ The onLoad event is called after the game save finishes loading. --]]
@@ -969,8 +963,6 @@ function onLoad()
     a1_xz = -3.5 * square_size
     -- 1D array of triggers
     triggers = {}
-    -- Table mapping trigger to piece (not yet used or kept up to date)
-    board_state = {}
     -- Table mapping square to trigger
     square_to_trigger = {}
     -- Table mapping type of piece to json of that piece type
@@ -1056,7 +1048,7 @@ end
 -- Takes a sunfish.lua board position string and sets it up on the TTS board
 -- Doesn't remove pieces that aren't on a trigger--pieces off the board
 function set_position(position)
-    log('setting up position...')
+    log('Setting up position:')
     log(position)
     set_player_turn(false)
 
@@ -1070,9 +1062,7 @@ function set_position(position)
 
     -- Build the new position
     for square = A8, H1 do
-        log(square)
         local piece = position:sub(square + __1, square + __1)
-        log(piece)
 
         if piece ~= '.' and piece ~= ' ' and piece ~= '\n' then
             local lower_piece = piece:lower()
@@ -1083,13 +1073,10 @@ function set_position(position)
 
             -- Get xyz position to spawn piece
             local square_str = tostring(square - 10)
-            log(square_str)
             local rank_index = tonumber(square_str:sub(1, 1))
             local file_index = tonumber(square_str:sub(2, 2))
             local square_name = squares[rank_index][file_index]
-            log(square_name)
             local trigger = square_to_trigger[square_name]
-            log(trigger)
             local pos = trigger.getPosition()
             pos.y = 4
 
