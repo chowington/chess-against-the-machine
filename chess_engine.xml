@@ -48,9 +48,7 @@
 </VerticalLayout>
 
 <VerticalLayout id="turn_panel" rectAlignment="UpperRight" height="200" width="200" offsetXY="0 -100">
-    <Text id="turn_text" color="white" fontSize="30">
-        White's turn
-    </Text>
+    <Text id="turn_text" color="white" fontSize="30" text="White's turn"></Text>
     <Button id="back_button" onClick="step_game_back" interactable="false">← Go back</Button>
     <Button id="forward_button" onClick="step_game_forward" interactable="false">Go forward →</Button>
     <Button id="reset_button" onClick="reset_board" interactable="true">Reset current position</Button>

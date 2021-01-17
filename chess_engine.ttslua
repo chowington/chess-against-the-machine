@@ -642,9 +642,7 @@ function execute_move(move)
                 handle_pawn_promotion(square_end)
                 set_interactivity(true)
                 set_player_turn(true)
-                broadcastToAll("White's turn!", {r=1, g=1, b=1})
-                UI.setAttribute('turn_text', 'text', "White's turn")
-                UI.setAttribute('turn_text', 'color', 'white')
+                broadcast_player_turn('white')
             end,
             function()
                 return not moving_piece.isSmoothMoving() and moving_piece.resting
@@ -1019,9 +1017,7 @@ function onObjectEnterScriptingZone(zone, enter_object)
                     set_player_turn(false)
                     set_interactivity(false)
                     -- Let the engine choose a move
-                    broadcastToAll("Black's turn...", {r=0.5, g=0.5, b=0.5})
-                    UI.setAttribute('turn_text', 'text', "Black's turn")
-                    UI.setAttribute('turn_text', 'color', 'rgb(0.6, 0.6, 0.6)')
+                    broadcast_player_turn('black')
                     make_engine_move()
                 else
                     broadcastToAll('Illegal move!', {r=1, g=0.5, b=0})
@@ -1151,6 +1147,33 @@ function set_player_turn(value)
         update_buttons()
         UI.setAttribute('reset_button', 'interactable', true)
         UI.setAttribute('new_game_button', 'interactable', true)
+    end
+end
+
+function broadcast_player_turn(player_color)
+    local current_turn_text = UI.getAttribute('turn_text', 'text')
+
+    if player_color ~= current_turn_text:sub(1, 5):lower() then
+        if player_color == 'white' then
+            broadcastToAll("White's turn!", {r=1, g=1, b=1})
+            UI.setAttribute('turn_text', 'text', "White's turn")
+            UI.setAttribute('turn_text', 'color', 'white')
+        else
+            broadcastToAll("Black's turn", {r=0.5, g=0.5, b=0.5})
+            UI.setAttribute('turn_text', 'color', 'rgb(0.6, 0.6, 0.6)')
+            animate_black_turn_message()
+        end
+    end
+end
+
+function animate_black_turn_message()
+    if not player_turn then
+        local turn_text = UI.getAttribute('turn_text', 'text')
+        local _, num_periods = turn_text:gsub('.', '.')
+        local periods = string.rep('.', (num_periods + 1) % 4)
+        UI.setAttribute('turn_text', 'text', "Black's turn"..periods)
+
+        Wait.time(animate_black_turn_message, 0.8)
     end
 end
 
