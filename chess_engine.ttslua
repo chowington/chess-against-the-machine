@@ -1046,17 +1046,15 @@ function onObjectEnterScriptingZone(zone, enter_object)
 end
 
 -- Takes a sunfish.lua board position string and sets it up on the TTS board
--- Doesn't remove pieces that aren't on a trigger--pieces off the board
 function set_position(position)
     log('Setting up position:')
     log(position)
     set_player_turn(false)
 
-    -- Clear the current board
-    for _, trigger in pairs(triggers) do
-        local piece = trigger.getObjects()[1]
-        if piece then
-            piece.destruct()
+    -- Clear all pieces from the game
+    for _, obj in pairs(getAllObjects()) do
+        if obj.name:sub(1, 5) == 'Chess' and obj.name ~= 'Chess_Board' then
+            obj.destruct()
         end
     end
 
@@ -1067,8 +1065,10 @@ function set_position(position)
         if piece ~= '.' and piece ~= ' ' and piece ~= '\n' then
             local lower_piece = piece:lower()
             local color = 'white'
+            local y_rot = 180
             if piece == lower_piece then
                 color = 'black'
+                y_rot = 0
             end
 
             -- Get xyz position to spawn piece
@@ -1085,7 +1085,7 @@ function set_position(position)
             spawnObjectJSON({
                 json = piece_json,
                 position = pos,
-                rotation = {x=0, y=0, z=0}
+                rotation = {x=0, y=y_rot, z=0}
             })
         end
     end
