@@ -1011,9 +1011,9 @@ function onObjectEnterScriptingZone(zone, enter_object)
                     set_player_turn(false)
                     set_interactivity(false)
                     -- Let the engine choose a move
-                    broadcastToAll("Black's turn...", {r=0, g=0, b=0})
+                    broadcastToAll("Black's turn...", {r=0.5, g=0.5, b=0.5})
                     UI.setAttribute('turn_text', 'text', "Black's turn")
-                    UI.setAttribute('turn_text', 'color', 'black')
+                    UI.setAttribute('turn_text', 'color', 'rgb(0.6, 0.6, 0.6)')
                     make_engine_move()
                 else
                     broadcastToAll('Illegal move!', {r=1, g=0.5, b=0})
@@ -1138,8 +1138,40 @@ function set_player_turn(value)
         UI.setAttribute('back_button', 'interactable', false)
         UI.setAttribute('forward_button', 'interactable', false)
         UI.setAttribute('reset_button', 'interactable', false)
+        UI.setAttribute('new_game_button', 'interactable', false)
     else
         update_buttons()
         UI.setAttribute('reset_button', 'interactable', true)
+        UI.setAttribute('new_game_button', 'interactable', true)
+    end
+end
+
+function show_new_game_confirm_panel(_, value)
+    if value == 'True' or value == true then
+        UI.show('new_game_confirm_panel')
+    else
+        UI.hide('new_game_confirm_panel')
+    end
+end
+
+function confirm_new_game(_, value)
+    UI.hide('new_game_confirm_panel')
+    UI.setAttribute('new_game_button', 'isOn', 'false')
+
+    if value == 'True' then
+        start_new_game()
+    end
+end
+
+function start_new_game()
+    setup_game()
+    set_position(pos.board)
+end
+
+function set_instructions_active(_, value)
+    if value == 'True' or value == true then
+        UI.show('instructions_panel')
+    else
+        UI.hide('instructions_panel')
     end
 end
