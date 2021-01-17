@@ -527,8 +527,14 @@ local function render_black(move)
 end
 
 function set_interactivity(value)
+    local interactivity = value
+
+    if game_over then
+        interactivity = false
+    end
+
     for key, obj in pairs(getAllObjects()) do
-        obj.interactable = value
+        obj.interactable = interactivity
     end
 end
 
@@ -650,6 +656,8 @@ end
 local function end_game(winner)
     game_over = true
     set_interactivity(false)
+    update_buttons()
+    UI.setAttribute('reset_button', 'interactable', true)
 
     if winner == 'white' then
         log("You won")
@@ -1164,6 +1172,7 @@ function confirm_new_game(_, value)
 end
 
 function start_new_game()
+    game_over = false
     setup_game()
     set_position(pos.board)
 end
