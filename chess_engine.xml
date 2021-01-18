@@ -4,34 +4,35 @@
 </Panel> -->
 
 <VerticalLayout rectAlignment="UpperRight" height="20" width="140" offsetXY="-10 -320">
-    <Toggle isOn="true" onValueChanged="set_instructions_active" textColor="grey">Show instructions</Toggle>
+    <Toggle isOn="true" onValueChanged="show_instructions_panel" textColor="grey">Show instructions</Toggle>
 </VerticalLayout>
 
-<VerticalLayout id="instructions_panel" rectAlignment="UpperRight" height="580" width="500" offsetXY="-10 -360" color="rgb(0,0,0,0.7)" padding="10 10 15 10">
+<VerticalLayout id="instructions_panel" rectAlignment="UpperRight" height="600" width="500" offsetXY="-10 -360" color="rgb(0,0,0,0.7)" padding="10 10 15 10">
     <Text id="instructions" color="white" height="10000" width="500" alignment="UpperLeft" fontSize="18">
-        Welcome to single-player chess!
+        Welcome to chess against the computer!
 
 
-        Notes:
+        How to play:
 
         -- You play as white. The computer plays as black.
 
         -- To capture a piece:
         ---- 1. Move the opponent's piece off the board.
-        ---- 2. Place your piece on its new square.
+        ---- 2. Place your piece onto its new square.
 
         -- Pawns automatically promote to queens.
 
         -- To castle, simply move your king to its new square. The rook will automatically be moved for you.
 
-        -- This is king-capture chess, meaning that players are allowed to play a move that ends with their own king in check, and the king can be captured.
+        -- This is king-capture chess, meaning that players are allowed to play a move that ends with their own king in check, and the king can be captured, resulting in a loss.
 
         -- The computer may take some time to think about its move.
 
-        -- The chess engine is not that robust. The following things may break the game:
+        -- The chess engine is not completely robust. The following things may break the game:
         ---- Tossing a piece or letting a piece roll across the board.
-        ---- Going back in the game's history using the left and right arrows at the top of the screen.
-        ---- Randomly moving black's pieces around the board.
+        ---- Rewinding/forwarding time using the arrows at the top left of the screen.
+        ---- Randomly moving black's pieces around the board
+        ---- Flipping the table ;)
     </Text>
 </VerticalLayout>
 

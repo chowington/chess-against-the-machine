@@ -1,14 +1,10 @@
 --[[ Lua code. See documentation: https://api.tabletopsimulator.com/ --]]
 
------------------------------
------------------------------
------ BEGIN SUNFISH.LUA -----
------------------------------
------------------------------
+-- A single-player chess mod for Tabletop Simulator that lets you play against
+-- a chess engine. Written by Connor Howington.
 
--- sunfish.lua, a human transpiler work of https://github.com/thomasahle/sunfish
--- embarassing and ugly translation done by Soumith Chintala
--- Code License: BSD
+-- Parts of this script are copied or adpated from sunfish.lua, a lua chess
+-- engine written by Soumith Chintala: https://github.com/soumith/sunfish.lua
 
 -- The table size is the maximum number of elements in the transposition table.
 --local TABLE_SIZE = 1e6
@@ -41,9 +37,8 @@ local initial =
     '          '     -- 110 -119
 
 local __1 = 1 -- 1-index correction
--------------------------------------------------------------------------------
+
 -- Move and evaluation tables
--------------------------------------------------------------------------------
 local N, E, S, W = -10, 1, 10, -1
 local directions = {
     P = {N, 2*N, N+W, N+E},
@@ -130,9 +125,6 @@ local pst = {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 }
 
--------------------------------------------------------------------------------
--- Chess logic
--------------------------------------------------------------------------------
 local function isspace(s)
    if s == ' ' or s == '\n' then
       return true
@@ -176,6 +168,7 @@ end
 
 local Position = {}
 
+-- Chess logic
 function Position.new(board, score, wc, bc, ep, kp)
    --[[  A state of a chess game
       board -- a 120 char representation of the board
@@ -359,20 +352,30 @@ local function tp_popitem()
    tp_count = tp_count - 1
 end
 
--------------------------------------------------------------------------------
 -- Search logic
--------------------------------------------------------------------------------
-
 local nodes = 0
 
 local function bound(pos, gamma, depth)
+    -- Defining the coroutine as a separate, inner function allows us to make
+    -- use of params from the outer function.
     function boundCoroutine()
         --[[ returns s(pos) <= r < gamma    if s(pos) < gamma
              returns s(pos) >= r >= gamma   if s(pos) >= gamma
         ]]--
         --log('at start of bound()')
+
+        -- An important global variable that tracks when this coroutine has
+        -- finished. This is the only way that other functions that call this
+        -- one will be able to tell when it's done, including when this function
+        -- has been called recursively.
         bound_done = false
+
+        -- We will frequently yield to allow TTS to continue running;
+        -- otherwise, TTS would be unresponsive and the OS would complain that
+        -- it had frozen. Note that the frequent handing over to TTS does slow
+        -- down the engine.
         coroutine.yield(0)
+
         nodes = nodes + 1
         --log(nodes)
 
@@ -384,7 +387,14 @@ local function bound(pos, gamma, depth)
         if entry ~= nil and entry.depth >= depth and (
                 entry.score < entry.gamma and entry.score < gamma or
                 entry.score >= entry.gamma and entry.score >= gamma) then
+
+            -- This would normally be returned from the function, but TTS's
+            -- coroutines require to you always return 1, so we have to set it
+            -- as a global variable.
             bound_score = entry.score
+
+            -- Every time we exit this function, we must set bound_done to true
+            -- so functions lower in the stack know that it's done.
             bound_done = true
             return 1
         end
@@ -400,6 +410,9 @@ local function bound(pos, gamma, depth)
         local nullscore
         if depth > 0 then
             bound(pos:rotate(), 1-gamma, depth-3)
+
+            -- After each call to bound(), we must yield until bound_done is set
+            -- to true, signalling that the function has finished.
             while not bound_done do
                 coroutine.yield(0)
             end
@@ -526,9 +539,11 @@ local function render_black(move)
     return render(119-move[0 + __1]) .. render(119-move[1 + __1])
 end
 
+-- Set interactivity of all in-game objects
 function set_interactivity(value)
     local interactivity = value
 
+    -- If the game is already over, don't allow interactivity
     if game_over then
         interactivity = false
     end
@@ -538,29 +553,57 @@ function set_interactivity(value)
     end
 end
 
-function handle_pawn_promotion(square_end)
-    -- Handle pawn promotion
-    -- Note that sunfish.lua always promotes to queen
-    -- Works for black. Need to test for white.
-    local moved_piece = square_to_trigger[square_end].getObjects()[1]
+-- Given a piece and a move, determine whether a castle has occured.
+-- If so, move the corresponding rook.
+function handle_castling(piece, move)
+    -- Castling isn't signified by any special character,
+    -- so we'll need to check whether the moving piece is a king
+    -- and whether it's moving more than one file.
+    if piece.name == 'Chess_King' then
+        local file_start = move:sub(1, 1)
+        local file_end = move:sub(3, 3)
 
-    if moved_piece.name == 'Chess_Pawn' then
-        local rank_end = square_end:sub(2, 2)
-        if rank_end == '1' or rank_end == '8' then
-            local position = moved_piece.getPosition()
+        if math.abs(file_end:byte() - file_start:byte()) > 1 then
+            -- Move rook based on what square the king ends on
+            local square_end = move:sub(3, 4)
+
+            local rook_move = {
+                ['c1'] = 'a1d1',
+                ['g1'] = 'h1f1',
+                ['c8'] = 'a8d8',
+                ['g8'] = 'h8f8'
+            }
+            execute_move(rook_move[square_end])
+        end
+    end
+end
+
+-- Checks a square to see whether it contains a pawn that deserves a promotion.
+-- square (string) is the square to check, eg. 'c8'
+-- Note that sunfish.lua always promotes to queen.
+-- Works for black. Needs testing for white.
+function handle_pawn_promotion(square)
+    local piece = square_to_trigger[square].getObjects()[1]
+
+    if piece and piece.name == 'Chess_Pawn' then
+        local rank = square:sub(2, 2)
+        if rank == '1' or rank == '8' then
+            local position = piece.getPosition()
+            -- Spawn the queen slightly above the board
             position.y = 3.41
 
-            local queen_json
-            if rank_end == '1' then
-                queen_json = Black_Queen.getJSON()
+            local color
+            if rank == '1' then
+                color = 'black'
             else
-                queen_json = White_Queen.getJSON()
+                color = 'white'
             end
+
             -- Delete pawn
-            moved_piece.destruct()
-            -- Clone new queen from stored piece
+            piece.destruct()
+            -- Clone new queen from stored json
             spawnObjectJSON({
-                json = queen_json,
+                json = pieces_json[color]['Chess_Queen'],
                 position = position,
                 rotation = {x=0, y=0, z=0}
             })
@@ -612,31 +655,17 @@ function execute_move(move)
             function() return not captured_piece.isSmoothMoving() end)
     end
 
-    --local position_end = trigger_end.getPosition()
     -- The origin of the chess pieces is at their center,
-    -- so we raise them up a bit so they don't try to phase into the board
+    -- so we raise them up a bit so they don't try to phase into the board.
+    -- That has proved troublesome.
     position_end.y = 4
-    moving_piece.setPositionSmooth(position_end, false, false)
 
-    -- Castling isn't signified by any special character,
-    -- so we'll need to check whether the moving piece is a king
-    -- and whether it's moving more than one square. If so,
-    -- move the corresponding rook to the appropriate spot.
-    if moving_piece.name == 'Chess_King' then
-        local distance_vec = position_end - position_start
-        if math.abs(distance_vec.x) > 1.5*square_size then
-            -- Move rook based on what square the king ends on
-            local rook_move = {
-                ['c1'] = 'a1d1',
-                ['g1'] = 'h1f1',
-                ['c8'] = 'a8d8',
-                ['g8'] = 'h8f8'
-            }
-            execute_move(rook_move[square_end])
-        end
-    end
+    -- Move the piece.
+    moving_piece.setPositionSmooth(position_end, false, false)
+    handle_castling(moving_piece, move)
 
     if not game_over and not player_turn then
+        -- Wait until the piece stops moving to continue
         Wait.condition(
             function()
                 handle_pawn_promotion(square_end)
@@ -651,6 +680,7 @@ function execute_move(move)
     end
 end
 
+-- Declare a winner and update UI for post-game interaction
 local function end_game(winner)
     game_over = true
     set_interactivity(false)
@@ -666,9 +696,10 @@ local function end_game(winner)
     end
 end
 
+-- Called after the engine is finished choosing its move
 local function engine_finished()
     log('Engine done')
-    -- print(move, score)
+    -- log(move, score)
     assert(chosen_score)
     if chosen_score <= -MATE_VALUE then
         end_game('white')
@@ -686,20 +717,23 @@ local function engine_finished()
     -- 'back rotate' the move before printing it.
     local move_str = render_black(chosen_move)
 
-    log("My move: "..move_str)
+    log("Engine move: "..move_str)
+    -- Update sunfish.lua's game state with the new move
     pos = pos:move(chosen_move)
+    -- Update our board history
     add_to_history(pos)
     printboard(pos.board)
 
     chosen_move = nil
     chosen_score = nil
 
+    -- Execute the move on the board
     execute_move(move_str)
 end
 
 function search()
-    --log('start search() coroutine')
     -- Iterative deepening MTD-bi search
+    --log('start search() coroutine')
     maxn = NODES_SEARCHED
     nodes = 0 -- the global value "nodes"
     local score
@@ -766,11 +800,7 @@ function search()
     return 1
 end
 
-
--------------------------------------------------------------------------------
 -- User interface
--------------------------------------------------------------------------------
-
 local function parse(c)
    if not c then return nil end
    local p, v = c:sub(1,1), c:sub(2,2)
@@ -791,6 +821,7 @@ local function ttfind(t, k)
    return false
 end
 
+-- Sets up new game state in sunfish.lua and board history
 local function setup_game()
    pos = Position.new(initial, 0, {true,true}, {true,true}, 0, 0)
    curr_board_position = {prev = nil, next = nil, value = pos}
@@ -800,6 +831,8 @@ local function setup_game()
    printboard(pos.board)
 end
 
+-- Takes a player move, validates it, and updates game state as necessary.
+-- Returns true if move is valid and false if not.
 local function handle_player_move(move)
     local square_start = move:sub(1, 2)
     local square_end = move:sub(3, 4)
@@ -811,7 +844,7 @@ local function handle_player_move(move)
     -- else
     --     -- This seems to work well enough for check checking,
     --     -- however it significantly slows down the game.
-    --     -- Can I somehow incorporate this into genMoves()?
+    --     -- Can it be incorporated into genMoves()?
     --     local this_pos = pos:move(move)
     --     local next_move, this_score = search(this_pos)
     --     local lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
@@ -825,29 +858,10 @@ local function handle_player_move(move)
     --     end
     end
 
-    -- Check to see whether the piece moved was a king
     local trigger_end = square_to_trigger[square_end]
     local moving_piece = trigger_end.getObjects()[1]
 
-    if moving_piece.name == 'Chess_King' then
-        -- Check to see whether the player intended to castle
-        local trigger_start = square_to_trigger[square_start]
-        local position_start = trigger_start.getPosition()
-        local position_end = trigger_end.getPosition()
-        local distance_vec = position_end - position_start
-
-        if math.abs(distance_vec.x) > 1.5*square_size then
-            -- Move rook based on what square the king ends on
-            local rook_move = {
-                ['c1'] = 'a1d1',
-                ['g1'] = 'h1f1',
-                ['c8'] = 'a8d8',
-                ['g8'] = 'h8f8'
-            }
-            execute_move(rook_move[square_end])
-        end
-    end
-
+    handle_castling(moving_piece, move)
     handle_pawn_promotion(square_end)
 
     pos = pos:move(parsed_move)
@@ -861,38 +875,25 @@ local function handle_player_move(move)
     return true
 end
 
-local function make_engine_move()
-    log('Engine running...')
-    -- Fire up the engine to look for a move.
-    -- local move, score = search(pos)
-    startLuaCoroutine(Global, 'search')
-    -- Wait.condition(engine_finished, function() return chosen_score ~= nil end)
-    --log('doing something else...')
-end
-
-
-
-----------------------------
-----------------------------
------ BEGIN TTS LOGIC -----
-----------------------------
-----------------------------
-
+-- Given 2 numbers repesenting the file and rank indices,
+-- returns the name of the square ('b3') at that rank and file.
 function index_to_square(file_index, rank_index)
     local name = squares[9-rank_index][file_index]
     return name
 end
 
+-- Called after each trigger is spawned. obj is the trigger and
+-- name should be the name of the square the trigger is on.
 function trigger_callback(obj, name)
     obj.setName(name)
 
+    -- Store the trigger in global tables for later use
     triggers[#triggers+1] = obj
     square_to_trigger[name] = obj
 
     local piece = obj.getObjects()[1]
     if piece then
         -- Assign piece to white or black based on its rank
-        -- Should change to not show name on hover
         if tonumber(name:sub(2)) <= 4 then
             piece.setName('white')
         else
@@ -905,21 +906,18 @@ function trigger_callback(obj, name)
 
         -- Store this piece for later reference
         pieces_json[piece.getName()][piece.name] = piece.getJSON()
-
-        -- If piece is a queen, store it for later use when promoting pawns
-        if piece.name == 'Chess_Queen' then
-            if piece.getName() == 'white' then
-                White_Queen = piece
-            else
-                Black_Queen = piece
-            end
-        end
     end
 end
 
 --Run once to spawn board triggers
 function spawn_triggers()
+    -- Size of square on chess board in in-game units
+    local square_size = 1.7
+    -- x,z coordinates of the 'a1' square
+    local a1_xz = -3.5 * square_size
+
     for rank = 1,8 do
+        -- Calculate spawn coordinates
         local z = a1_xz + (rank-1)*square_size
 
         for file = 1,8 do
@@ -941,6 +939,7 @@ end
 
 --[[ The onLoad event is called after the game save finishes loading. --]]
 function onLoad()
+    -- Global variables
     squares = {
         {"a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8"},
         {"a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7"},
@@ -963,10 +962,9 @@ function onLoad()
 
     game_over = false
     player_move = ''
-    player_color = 'white'
     player_turn = true
-    square_size = 1.7
-    a1_xz = -3.5 * square_size
+
+    -- The following tables will be populated when triggers are spawned
     -- 1D array of triggers
     triggers = {}
     -- Table mapping square to trigger
@@ -980,18 +978,20 @@ end
 
 --[[ The onUpdate event is called once per frame. --]]
 function onUpdate()
-    --[[ print('onUpdate loop!') --]]
     -- This is meant to show the engine's progress in finding a move, however
     -- nodes is a minimum, not a maximum, so I'm not sure how helpful this is.
     --UI.setAttribute('progressbar', 'percentage', nodes / NODES_SEARCHED * 100)
 end
 
 function onObjectLeaveScriptingZone(zone, leave_object)
+    -- Clear out the move string
     player_move = ''
 
-    if player_turn and leave_object.getName() == player_color then
+    if player_turn and leave_object.getName() == 'white' then
         local name = zone.getName()
         log('Leaving '..name)
+        -- Store this square as the first square in the move string,
+        -- the square that the moving piece left.
         player_move = name
     end
 end
@@ -1000,48 +1000,51 @@ function onObjectEnterScriptingZone(zone, enter_object)
     local function handleEvent(zone, enter_object)
         local name = zone.getName()
 
-        if #name > 0 then
+        -- Ignore if the zone has no name, player_move doesn't currently
+        -- have exactly two characters (one square), and if both squares
+        -- are the same
+        if #name > 0 and #player_move == 2 and name ~= player_move then
             log('Entering '..name)
+            -- Add this zone's square to the end of the move string,
+            -- being the square the moving piece is moving into
             player_move = player_move..name
+            log('Player move: '..player_move)
 
-            -- If the player actually moved a piece to a different square
-            if player_move:sub(1, 2) ~= player_move:sub(3, 4) then
-                log('Player move: '..player_move)
+            -- Send the player's move to the engine
+            local valid_move = handle_player_move(player_move)
 
-                -- Send the player's move to the engine
-                local valid_move = handle_player_move(player_move)
+            if valid_move then
+                -- Set player_turn to false
+                -- It will get reset to true in search()
+                set_player_turn(false)
+                set_interactivity(false)
+                broadcast_player_turn('black')
 
-                if valid_move then
-                    -- Set player_turn to false
-                    -- It will get reset to true during make_engine_move()
-                    set_player_turn(false)
-                    set_interactivity(false)
-                    -- Let the engine choose a move
-                    broadcast_player_turn('black')
-                    make_engine_move()
-                else
-                    broadcastToAll('Illegal move!', {r=1, g=0.5, b=0})
-                    -- Reset the piece
-                    -- This doesn't play nicely if the move was messy
-                    set_player_turn(false)
-                    local orig_square = player_move:sub(1, 2)
-                    local orig_pos = square_to_trigger[orig_square].getPosition()
-                    orig_pos.y = 4
-                    enter_object.setPositionSmooth(orig_pos, false, true)
-                    Wait.condition(
-                        function() set_player_turn(true) end,
-                        function()
-                            return not enter_object.isSmoothMoving() and enter_object.resting
-                        end
-                    )
-                end
+                -- Fire up the engine to look for a move
+                log('Engine running...')
+                startLuaCoroutine(Global, 'search')
             else
-                player_move = ''
+                broadcastToAll('Illegal move!', {r=1, g=0.5, b=0})
+                -- Reset the piece
+                -- This doesn't play nicely if the move was messy
+                set_player_turn(false)
+                local orig_square = player_move:sub(1, 2)
+                local orig_pos = square_to_trigger[orig_square].getPosition()
+                orig_pos.y = 4
+                enter_object.setPositionSmooth(orig_pos, false, true)
+                Wait.condition(
+                    function() set_player_turn(true) end,
+                    function()
+                        return not enter_object.isSmoothMoving() and enter_object.resting
+                    end
+                )
             end
+        else
+            player_move = ''
         end
     end
 
-    if player_turn and enter_object.getName() == player_color then
+    if player_turn and enter_object.getName() == 'white' then
         Wait.condition(
             function() handleEvent(zone, enter_object) end,
             function() return enter_object.resting end
@@ -1064,12 +1067,15 @@ function set_position(position)
 
     -- Build the new position
     for square = A8, H1 do
+        -- Single-character piece string from sunfish.lua board position
         local piece = position:sub(square + __1, square + __1)
 
-        if piece ~= '.' and piece ~= ' ' and piece ~= '\n' then
+        if piece ~= '.' and not isspace(piece) then
             local lower_piece = piece:lower()
             local color = 'white'
             local y_rot = 180
+
+            -- If piece is lowercase
             if piece == lower_piece then
                 color = 'black'
                 y_rot = 0
@@ -1097,7 +1103,7 @@ function set_position(position)
     Wait.time(function() set_player_turn(true) end, 1)
 end
 
--- Go back in the game's history to before the last player move
+-- Go back in the game's history to before the previous player move
 function step_game_back()
     if (curr_board_position.prev ~= nil and curr_board_position.prev.prev ~= nil) then
         curr_board_position = curr_board_position.prev.prev
@@ -1117,28 +1123,39 @@ function step_game_forward()
     end
 end
 
+-- Reset the current board position in case pieces were misplaced
 function reset_board()
     set_position(curr_board_position.value.board)
 end
 
+-- Start a new game, permanently losing current game state and history
+function start_new_game()
+    game_over = false
+    setup_game()
+    set_position(pos.board)
+end
+
+-- Set the game history forward and back buttons depending on
+-- whether history exists in each direction
 function update_buttons()
-    if (curr_board_position.prev == nil) then
-        UI.setAttribute('back_button', 'interactable', false)
-    else
+    if curr_board_position.prev then
         UI.setAttribute('back_button', 'interactable', true)
+    else
+        UI.setAttribute('back_button', 'interactable', false)
     end
 
-    if (curr_board_position.next == nil) then
-        UI.setAttribute('forward_button', 'interactable', false)
-    else
+    if curr_board_position.next then
         UI.setAttribute('forward_button', 'interactable', true)
+    else
+        UI.setAttribute('forward_button', 'interactable', false)
     end
 end
 
+-- Set global boolean player_turn, updating UI buttons accordingly
 function set_player_turn(value)
     player_turn = value
 
-    if (not value) then
+    if not value then
         UI.setAttribute('back_button', 'interactable', false)
         UI.setAttribute('forward_button', 'interactable', false)
         UI.setAttribute('reset_button', 'interactable', false)
@@ -1150,12 +1167,13 @@ function set_player_turn(value)
     end
 end
 
+-- Broadcast player_color's turn starting and update UI turn text accordingly
 function broadcast_player_turn(player_color)
     local current_turn_text = UI.getAttribute('turn_text', 'text')
 
     if player_color ~= current_turn_text:sub(1, 5):lower() then
         if player_color == 'white' then
-            broadcastToAll("White's turn!", {r=1, g=1, b=1})
+            broadcastToAll("White's turn", {r=1, g=1, b=1})
             UI.setAttribute('turn_text', 'text', "White's turn")
             UI.setAttribute('turn_text', 'color', 'white')
         else
@@ -1166,6 +1184,7 @@ function broadcast_player_turn(player_color)
     end
 end
 
+-- Animate the "Black's turn..." text as long as it's still black's turn
 function animate_black_turn_message()
     if not player_turn then
         local turn_text = UI.getAttribute('turn_text', 'text')
@@ -1177,6 +1196,7 @@ function animate_black_turn_message()
     end
 end
 
+-- Show/hide new game confirmation panel based on boolean value
 function show_new_game_confirm_panel(_, value)
     if value == 'True' or value == true then
         UI.show('new_game_confirm_panel')
@@ -1185,6 +1205,7 @@ function show_new_game_confirm_panel(_, value)
     end
 end
 
+-- Handles the player's choice in the new game confirmation panel
 function confirm_new_game(_, value)
     UI.hide('new_game_confirm_panel')
     UI.setAttribute('new_game_button', 'isOn', 'false')
@@ -1194,13 +1215,8 @@ function confirm_new_game(_, value)
     end
 end
 
-function start_new_game()
-    game_over = false
-    setup_game()
-    set_position(pos.board)
-end
-
-function set_instructions_active(_, value)
+-- Show/hide instructions panel based on boolean value
+function show_instructions_panel(_, value)
     if value == 'True' or value == true then
         UI.show('instructions_panel')
     else
