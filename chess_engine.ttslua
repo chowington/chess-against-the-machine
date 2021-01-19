@@ -972,6 +972,13 @@ function onLoad()
     -- Table mapping type of piece to json of that piece type
     pieces_json = {white = {}, black = {}}
 
+    -- Clear all existing triggers from the game
+    for _, obj in pairs(getAllObjects()) do
+        if obj.name == 'ScriptingTrigger' then
+            obj.destruct()
+        end
+    end
+
     spawn_triggers()
     setup_game()
 end
