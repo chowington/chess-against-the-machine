@@ -7,9 +7,9 @@
     <Toggle isOn="true" onValueChanged="show_instructions_panel" textColor="grey">Show instructions</Toggle>
 </VerticalLayout>
 
-<VerticalLayout id="instructions_panel" rectAlignment="UpperRight" height="600" width="500" offsetXY="-10 -360" color="rgb(0,0,0,0.7)" padding="10 10 15 10">
+<VerticalLayout id="instructions_panel" rectAlignment="UpperRight" height="615" width="500" offsetXY="-10 -360" color="rgb(0,0,0,0.7)" padding="10 10 15 10">
     <Text id="instructions" color="white" height="10000" width="500" alignment="UpperLeft" fontSize="18">
-        Welcome to chess against the computer!
+        Welcome to Chess Against the Machine!
 
 
         How to play:
@@ -28,10 +28,11 @@
 
         -- The computer may take some time to think about its move.
 
-        -- The chess engine is not completely robust. The following things may break the game:
+        -- This mod is not completely robust. The following things may break the game:
         ---- Tossing a piece or letting a piece roll across the board.
         ---- Rewinding/forwarding time using the arrows at the top left of the screen.
-        ---- Randomly moving black's pieces around the board
+        ---- Randomly moving black's pieces around the board.
+        ---- Saving and loading.
         ---- Flipping the table ;)
     </Text>
 </VerticalLayout>

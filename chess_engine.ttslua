@@ -686,6 +686,7 @@ local function end_game(winner)
     set_interactivity(false)
     update_buttons()
     UI.setAttribute('reset_button', 'interactable', true)
+    UI.setAttribute('new_game_button', 'interactable', true)
 
     if winner == 'white' then
         log("You won")
@@ -878,8 +879,7 @@ end
 -- Given 2 numbers repesenting the file and rank indices,
 -- returns the name of the square ('b3') at that rank and file.
 function index_to_square(file_index, rank_index)
-    local name = squares[9-rank_index][file_index]
-    return name
+    return squares[9-rank_index][file_index]
 end
 
 -- Called after each trigger is spawned. obj is the trigger and
@@ -977,11 +977,11 @@ function onLoad()
 end
 
 --[[ The onUpdate event is called once per frame. --]]
-function onUpdate()
-    -- This is meant to show the engine's progress in finding a move, however
-    -- nodes is a minimum, not a maximum, so I'm not sure how helpful this is.
-    --UI.setAttribute('progressbar', 'percentage', nodes / NODES_SEARCHED * 100)
-end
+-- function onUpdate()
+--     -- This is meant to show the engine's progress in finding a move, however
+--     -- nodes is a minimum, not a maximum, so I'm not sure how helpful this is.
+--     --UI.setAttribute('progressbar', 'percentage', nodes / NODES_SEARCHED * 100)
+-- end
 
 function onObjectLeaveScriptingZone(zone, leave_object)
     -- Clear out the move string
