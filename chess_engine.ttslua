@@ -1068,7 +1068,9 @@ end
 function set_position(position)
     log('Setting up position:')
     log(position)
-    set_player_turn(false)
+    -- Set player_turn to false so triggers won't be activated when pieces are
+    -- spawned
+    player_turn = false
 
     -- Clear all pieces from the game
     for _, obj in pairs(getAllObjects()) do
@@ -1107,12 +1109,19 @@ function set_position(position)
             spawnObjectJSON({
                 json = piece_json,
                 position = pos,
-                rotation = {x=0, y=y_rot, z=0}
+                rotation = {x=0, y=y_rot, z=0},
+                callback_function = function(obj) obj.interactable = false end,
             })
         end
     end
 
-    Wait.time(function() set_player_turn(true) end, 1)
+    Wait.time(
+        function()
+            player_turn = true
+            set_interactivity(true)
+        end,
+        0.6
+    )
 end
 
 -- Go back in the game's history to before the previous player move
@@ -1121,6 +1130,7 @@ function step_game_back()
         curr_board_position = curr_board_position.prev.prev
         local new_position = curr_board_position.value
         pos = new_position
+        update_buttons()
         set_position(new_position.board)
     end
 end
@@ -1131,6 +1141,7 @@ function step_game_forward()
         curr_board_position = curr_board_position.next.next
         local new_position = curr_board_position.value
         pos = new_position
+        update_buttons()
         set_position(new_position.board)
     end
 end
