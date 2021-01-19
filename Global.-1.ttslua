@@ -7,6 +7,9 @@
 -- A chess mod for Tabletop Simulator that lets you play against a chess engine.
 -- Written by Connor Howington :)
 
+-- Want to contribute?
+-- Head over to https://github.com/chowington/chess-against-the-machine
+
 -- Parts of this script are copied or adpated from sunfish.lua, a lua chess
 -- engine written by Soumith Chintala: https://github.com/soumith/sunfish.lua
 -- Thanks Soumith!
