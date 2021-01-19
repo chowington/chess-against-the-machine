@@ -5,10 +5,16 @@
 -------------------------------
 
 -- A chess mod for Tabletop Simulator that lets you play against a chess engine.
--- Written by Connor Howington.
+-- Written by Connor Howington :)
 
 -- Parts of this script are copied or adpated from sunfish.lua, a lua chess
 -- engine written by Soumith Chintala: https://github.com/soumith/sunfish.lua
+-- Thanks Soumith!
+
+
+
+-- Set to print debugging info
+debug = false
 
 -- The table size is the maximum number of elements in the transposition table.
 --local TABLE_SIZE = 1e6
@@ -694,17 +700,17 @@ local function end_game(winner)
     UI.setAttribute('turn_text', 'text', "Game over")
 
     if winner == 'white' then
-        log("You won")
+        if debug then log("You won") end
         broadcastToAll("White wins!", {r=0, g=1, b=0})
     else
-        log("You lost")
+        if debug then log("You lost") end
         broadcastToAll("Black wins!", {r=1, g=0, b=0})
     end
 end
 
 -- Called after the engine is finished choosing its move
 local function engine_finished()
-    log('Engine done')
+    if debug then log('Engine done') end
     -- log(move, score)
     assert(chosen_score)
     if chosen_score <= -MATE_VALUE then
@@ -723,12 +729,12 @@ local function engine_finished()
     -- 'back rotate' the move before printing it.
     local move_str = render_black(chosen_move)
 
-    log("Engine move: "..move_str)
+    if debug then log("Engine move: "..move_str) end
     -- Update sunfish.lua's game state with the new move
     pos = pos:move(chosen_move)
     -- Update our board history
     add_to_history(pos)
-    printboard(pos.board)
+    if debug then printboard(pos.board) end
 
     chosen_move = nil
     chosen_score = nil
@@ -834,7 +840,7 @@ local function setup_game()
 
    -- We add some spaces to the board before we print it.
    -- That makes it more readable and pleasing.
-   printboard(pos.board)
+   if debug then printboard(pos.board) end
 end
 
 -- Takes a player move, validates it, and updates game state as necessary.
@@ -845,7 +851,7 @@ local function handle_player_move(move)
     local parsed_move = {parse(square_start), parse(square_end)}
     if not ttfind(pos:genMoves(), parsed_move) then
         -- Inform the user when invalid input (e.g. "help") is entered
-        log("Invalid input. Please enter a move in the proper format (e.g. g8f6)")
+        if debug then log("Invalid input. Please enter a move in the proper format (e.g. g8f6)") end
         return false
     -- else
     --     -- This seems to work well enough for check checking,
@@ -876,7 +882,7 @@ local function handle_player_move(move)
 
     -- After our move we rotate the board and print it again.
     -- This allows us to see the effect of our move.
-    printboard(pos:rotate().board)
+    if debug then printboard(pos:rotate().board) end
 
     return true
 end
@@ -939,7 +945,12 @@ function spawn_triggers()
         end
     end
 
-    Wait.condition(function() log('Triggers spawned') end, function() return #triggers == 64 end)
+    if debug then
+        Wait.condition(
+            function() log('Triggers spawned') end,
+            function() return #triggers == 64 end
+        )
+    end
 end
 
 --[[ The onLoad event is called after the game save finishes loading. --]]
@@ -1001,7 +1012,7 @@ function onObjectLeaveScriptingZone(zone, leave_object)
 
     if player_turn and leave_object.getName() == 'white' then
         local name = zone.getName()
-        log('Leaving '..name)
+        if debug then log('Leaving '..name) end
         -- Store this square as the first square in the move string,
         -- the square that the moving piece left.
         player_move = name
@@ -1009,18 +1020,16 @@ function onObjectLeaveScriptingZone(zone, leave_object)
 end
 
 function onObjectEnterScriptingZone(zone, enter_object)
-    local function handleEvent(zone, enter_object)
-        local name = zone.getName()
+    local name = zone.getName()
 
-        -- Ignore if the zone has no name, player_move doesn't currently
-        -- have exactly two characters (one square), and if both squares
-        -- are the same
-        if #name > 0 and #player_move == 2 and name ~= player_move then
-            log('Entering '..name)
+    local function handleEvent(zone, enter_object)
+        -- Ignore if player_move doesn't currently have exactly two characters
+        -- (one square) or if both squares are the same
+        if #player_move == 2 and name ~= player_move then
             -- Add this zone's square to the end of the move string,
             -- being the square the moving piece is moving into
             player_move = player_move..name
-            log('Player move: '..player_move)
+            if debug then log('Player move: '..player_move) end
 
             -- Send the player's move to the engine
             local valid_move = handle_player_move(player_move)
@@ -1033,7 +1042,7 @@ function onObjectEnterScriptingZone(zone, enter_object)
                 broadcast_player_turn('black')
 
                 -- Fire up the engine to look for a move
-                log('Engine running...')
+                if debug then log('Engine running...') end
                 startLuaCoroutine(Global, 'search')
             else
                 broadcastToAll('Illegal move!', {r=1, g=0.5, b=0})
@@ -1056,7 +1065,9 @@ function onObjectEnterScriptingZone(zone, enter_object)
         end
     end
 
-    if player_turn and enter_object.getName() == 'white' then
+    if player_turn and #name > 0 and enter_object.getName() == 'white' then
+        if debug then log('Entering '..name) end
+
         Wait.condition(
             function() handleEvent(zone, enter_object) end,
             function() return enter_object.resting end
@@ -1066,8 +1077,10 @@ end
 
 -- Takes a sunfish.lua board position string and sets it up on the TTS board
 function set_position(position)
-    log('Setting up position:')
-    log(position)
+    if debug then
+        log('Setting up position:')
+        printboard(position)
+    end
     -- Set player_turn to false so triggers won't be activated when pieces are
     -- spawned
     player_turn = false
