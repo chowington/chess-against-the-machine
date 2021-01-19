@@ -1,7 +1,11 @@
 --[[ Lua code. See documentation: https://api.tabletopsimulator.com/ --]]
 
--- A single-player chess mod for Tabletop Simulator that lets you play against
--- a chess engine. Written by Connor Howington.
+-------------------------------
+-- Chess Against the Machine --
+-------------------------------
+
+-- A chess mod for Tabletop Simulator that lets you play against a chess engine.
+-- Written by Connor Howington.
 
 -- Parts of this script are copied or adpated from sunfish.lua, a lua chess
 -- engine written by Soumith Chintala: https://github.com/soumith/sunfish.lua

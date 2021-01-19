@@ -9,7 +9,7 @@
 
 <VerticalLayout id="instructions_panel" rectAlignment="UpperRight" height="615" width="500" offsetXY="-10 -360" color="rgb(0,0,0,0.7)" padding="10 10 15 10">
     <Text id="instructions" color="white" height="10000" width="500" alignment="UpperLeft" fontSize="18">
-        Welcome to Chess Against the Machine!
+        Welcome to Chess Against the Machine (Alpha)!
 
 
         How to play:
@@ -17,8 +17,8 @@
         -- You play as white. The computer plays as black.
 
         -- To capture a piece:
-        ---- 1. Move the opponent's piece off the board.
-        ---- 2. Place your piece onto its new square.
+        ------ 1. Move the opponent's piece off the board.
+        ------ 2. Place your piece onto its new square.
 
         -- Pawns automatically promote to queens.
 
@@ -28,30 +28,30 @@
 
         -- The computer may take some time to think about its move.
 
-        -- This mod is not completely robust. The following things may break the game:
-        ---- Tossing a piece or letting a piece roll across the board.
-        ---- Rewinding/forwarding time using the arrows at the top left of the screen.
-        ---- Randomly moving black's pieces around the board.
-        ---- Saving and loading.
-        ---- Flipping the table ;)
+        -- This alpha mod is not completely robust. The following things may break the game:
+        ------ Saving and loading.
+        ------ Rewinding/forwarding time using the built-in arrows at the top left of the screen.
+        ------ Tossing a piece or letting a piece roll across the board.
+        ------ Randomly moving black's pieces around the board.
+        ------ Flipping the table ;)
     </Text>
 </VerticalLayout>
 
 <VerticalLayout id="new_game_panel" rectAlignment="UpperRight" height="40" width="200" offsetXY="-270 -10">
-    <ToggleButton id="new_game_button" onValueChanged="show_new_game_confirm_panel" interactable="true">New game</ToggleButton>
+    <ToggleButton id="new_game_button" onValueChanged="show_new_game_confirm_panel" interactable="true" fontSize="20">New game</ToggleButton>
 </VerticalLayout>
 
 <VerticalLayout id="new_game_confirm_panel" rectAlignment="UpperRight" height="180" width="300" offsetXY="-270 -65" active='false' color="rgb(0,0,0,0.7)" padding="10 10 0 10">
-    <Text color="white" fontSize="16" height="60">
+    <Text color="white" fontSize="20" height="60">
         Are you sure you want to start a new game?
     </Text>
-    <Button id="new_game_yes_button" onClick="confirm_new_game(True)" color="red" textColor="white" height="60">Yes</Button>
-    <Button id="new_game_no_button" onClick="confirm_new_game(False)" height="60">No</Button>
+    <Button id="new_game_yes_button" onClick="confirm_new_game(True)" color="red" textColor="white" height="60" fontSize="20">Yes</Button>
+    <Button id="new_game_no_button" onClick="confirm_new_game(False)" height="60" fontSize="20">No</Button>
 </VerticalLayout>
 
 <VerticalLayout id="turn_panel" rectAlignment="UpperRight" height="200" width="200" offsetXY="0 -100">
     <Text id="turn_text" color="white" fontSize="30" text="White's turn"></Text>
-    <Button id="back_button" onClick="step_game_back" interactable="false">← Go back</Button>
-    <Button id="forward_button" onClick="step_game_forward" interactable="false">Go forward →</Button>
-    <Button id="reset_button" onClick="reset_board" interactable="true">Reset current position</Button>
+    <Button id="back_button" onClick="step_game_back" interactable="false" fontSize="20">← Go back</Button>
+    <Button id="forward_button" onClick="step_game_forward" interactable="false" fontSize="20">Go forward →</Button>
+    <Button id="reset_button" onClick="reset_board" interactable="true" fontSize="20">Reset pieces</Button>
 </VerticalLayout>
