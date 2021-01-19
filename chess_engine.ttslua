@@ -691,6 +691,7 @@ local function end_game(winner)
     update_buttons()
     UI.setAttribute('reset_button', 'interactable', true)
     UI.setAttribute('new_game_button', 'interactable', true)
+    UI.setAttribute('turn_text', 'text', "Game over")
 
     if winner == 'white' then
         log("You won")
@@ -1197,7 +1198,7 @@ end
 
 -- Animate the "Black's turn..." text as long as it's still black's turn
 function animate_black_turn_message()
-    if not player_turn then
+    if not player_turn and not game_over then
         local turn_text = UI.getAttribute('turn_text', 'text')
         local _, num_periods = turn_text:gsub('.', '.')
         local periods = string.rep('.', (num_periods + 1) % 4)
