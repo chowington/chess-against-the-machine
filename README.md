@@ -24,8 +24,6 @@ Want to make this mod better? Fork it and submit a pull request! :)
 
 ---
 
-Image credits:
-
-Chess knight icon made by Pixel perfect from www.flaticon.com
-
+Image credits:  
+Chess knight icon made by Pixel perfect from www.flaticon.com  
 Laptop icon made by Freepik from www.flaticon.com
