@@ -940,8 +940,8 @@ function spawn_triggers()
 
             spawnObject({
               type = "ScriptingTrigger",
-              position = {x=x, y=1.7, z=z},
-              scale = {x=1, y=0.1, z=1},
+              position = {x=x, y=1.6, z=z},
+              scale = {x=1, y=0, z=1},
               sound = false,
               callback_function = function(obj) trigger_callback(obj, name) end
             })
